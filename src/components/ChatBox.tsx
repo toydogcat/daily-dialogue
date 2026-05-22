@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Book } from "../booksData";
 import { Send, Sparkles, RefreshCw, AlertCircle, Calendar, HelpCircle, ArrowRight, Mic, Volume2 } from "lucide-react";
+import { useWebLLM } from "../hooks/useWebLLM";
 
 interface Message {
   id: string;
@@ -14,9 +15,19 @@ interface ChatBoxProps {
   aiVoice: "male" | "female";
   fontSize: "small" | "medium" | "large";
   geminiKey: string;
+  aiEngine: "gemini" | "local";
+  webLLM: ReturnType<typeof useWebLLM>;
 }
 
-export default function ChatBox({ book, language, aiVoice, fontSize, geminiKey }: ChatBoxProps) {
+export default function ChatBox({ 
+  book, 
+  language, 
+  aiVoice, 
+  fontSize, 
+  geminiKey,
+  aiEngine,
+  webLLM
+}: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -107,10 +118,6 @@ export default function ChatBox({ book, language, aiVoice, fontSize, geminiKey }
     setErrorMsg(null);
 
     try {
-      if (!geminiKey) {
-        throw new Error(language === "en-US" ? "Please enter your Gemini API Key in Settings first." : "請先在設定中輸入您的 Gemini API Key！");
-      }
-
       const targetLanguage = language === 'en-US' ? 'English' : '繁體中文 (Traditional Chinese / 台灣地區用語習慣)';
       const chaptersStr = book.chapters.map((ch, idx) => `  ${idx + 1}. ${ch.title}: ${ch.summary}`).join("\n");
       const conceptsStr = book.concepts.map((con, idx) => `  要點 ${idx + 1}：【${con.title}】\n  摘要：${con.description}\n  詳情說明：${con.extendedContent}`).join("\n\n");
@@ -149,44 +156,87 @@ ${book.readingGuide}
 5. 在對話一開始，你可以主動對部屬／故事的痛點提出反問，激發他們的學習慾。
 6. 請適當在回答中提及：書中某章節、哪一個具體概念（例如：薩提爾的冰山理論、或是起承轉合故事架構），讓使用者感受到你是這本書的權威教練。`;
 
-      const contents = [...messages, newUserMsg].map(m => ({
-        role: m.role === "assistant" ? "model" : "user",
-        parts: [{ text: m.content }]
-      }));
+      let replyText = "";
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemInstruction }] },
-          contents: contents,
-          generationConfig: { temperature: 0.7 }
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error?.message || "API 請求失敗，請確認您的 API Key 是否正確或有額度。");
-      }
-
-      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "抱歉，我無法做出回應。";
-
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `ai-msg-${Date.now()}`,
-          role: "assistant",
-          content: replyText
+      if (aiEngine === "local") {
+        if (!webLLM.isLoaded || !webLLM.engine) {
+          throw new Error(language === "en-US" ? "Local AI is not initialized yet." : "本地 AI 尚未載入就緒！");
         }
-      ]);
+
+        const messagesForLLM = [
+          { role: "system", content: systemInstruction },
+          ...messages.map(m => ({ role: m.role, content: m.content })),
+          { role: "user", content: textToSend }
+        ];
+
+        // First add an empty model reply for typing stream
+        const replyId = `ai-msg-${Date.now()}`;
+        setMessages(prev => [
+          ...prev,
+          {
+            id: replyId,
+            role: "assistant",
+            content: ""
+          }
+        ]);
+
+        const chunks = await webLLM.engine.chat.completions.create({
+          messages: messagesForLLM as any,
+          stream: true,
+          temperature: 0.7,
+        });
+
+        for await (const chunk of chunks) {
+          const delta = chunk.choices[0]?.delta?.content || "";
+          replyText += delta;
+          setMessages(prev => {
+            return prev.map(m => m.id === replyId ? { ...m, content: replyText } : m);
+          });
+        }
+      } else {
+        if (!geminiKey) {
+          throw new Error(language === "en-US" ? "Please enter your Gemini API Key in Settings first." : "請先在設定中輸入您的 Gemini API Key！");
+        }
+
+        const contents = [...messages, newUserMsg].map(m => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }]
+        }));
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemInstruction }] },
+            contents: contents,
+            generationConfig: { temperature: 0.7 }
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error?.message || "API 請求失敗，請確認您的 API Key 是否正確或有額度。");
+        }
+
+        replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "抱歉，我無法做出回應。";
+
+        setMessages(prev => [
+          ...prev,
+          {
+            id: `ai-msg-${Date.now()}`,
+            role: "assistant",
+            content: replyText
+          }
+        ]);
+      }
       
       // Auto-speak the response
       speakText(replyText);
 
     } catch (err: any) {
       console.error("Chat action failed:", err);
-      setErrorMsg(err.message || "發生錯誤，請確認設定中的 API Key 是否正確。");
+      setErrorMsg(err.message || "發生錯誤，請確認設定中的 API Key 或本地模型是否正常。");
     } finally {
       setIsLoading(false);
     }
@@ -278,6 +328,8 @@ ${book.readingGuide}
     }
   }, []);
 
+  const isLocalPending = aiEngine === "local" && !webLLM.isLoaded;
+
   return (
     <div id="chat-box-container" className="flex flex-col h-[640px] bg-natural-bg rounded-3xl border border-natural-border shadow-2xs overflow-hidden animate-fade-in">
       {/* Top Header details of the Coach */}
@@ -291,16 +343,17 @@ ${book.readingGuide}
               <span>{book.title}</span>
               <Sparkles className="w-3.5 h-3.5 text-amber-200" />
             </h3>
-            <p className="text-[10px] text-white/70 font-mono tracking-wider">
-              DAILY DIALOGUE COACH • 1-ON-1 STUDY
+            <p className="text-[10px] text-white/70 font-mono tracking-wider uppercase">
+              DAILY DIALOGUE COACH • {aiEngine === "local" ? "LOCAL GPU AI" : "CLOUD GEMINI"}
             </p>
           </div>
         </div>
 
         <button
           onClick={handleClearHistory}
-          title="清除清除對話"
-          className="p-2 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-colors cursor-pointer"
+          disabled={isLocalPending}
+          title="重置對話"
+          className="p-2 hover:bg-white/10 rounded-lg text-white/80 hover:text-white transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <RefreshCw className="w-4 h-4" />
         </button>
@@ -308,87 +361,130 @@ ${book.readingGuide}
 
       {/* Message and response body area */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-natural-cream/60 border-b border-natural-border/30">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`flex gap-3 max-w-[85%] ${
-              m.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
-            }`}
-          >
-            {/* Persona Avatar icons */}
-            <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] font-mono leading-none shadow-3xs ${
-                m.role === "user"
-                  ? "bg-natural-sage-dark text-[#FDFCF8]"
-                  : "bg-natural-sand text-white font-serif italic"
-              }`}
-            >
-              {m.role === "user" ? "Me" : "AI"}
+        {isLocalPending ? (
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-6 animate-fade-in">
+            <div className="w-16 h-16 rounded-2xl bg-[#6B705C]/10 flex items-center justify-center border border-[#6B705C]/20 shadow-2xs">
+              <Sparkles className="w-8 h-8 text-[#6B705C] animate-pulse" />
             </div>
-
-            {/* Bubble layout context */}
-            <div className="space-y-1">
-              <div
-                className={`p-4 rounded-2xl ${fontSizeClass} leading-relaxed whitespace-pre-line relative group ${
-                  m.role === "user"
-                    ? "bg-natural-sage text-[#FDFCF8] rounded-tr-none"
-                    : "bg-natural-bg text-natural-dark border border-natural-border rounded-tl-none shadow-3xs font-serif"
-                }`}
-              >
-                {m.content}
-                
-                {m.role === "assistant" && (
-                  <button 
-                    onClick={() => speakText(m.content)}
-                    className="absolute -right-8 bottom-0 p-1.5 text-natural-sand hover:text-natural-sage opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="朗讀 (Read Aloud)"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <span className="text-[10px] text-natural-sand block px-1.5 font-mono tracking-wider">
-                {m.role === "user" ? (language === "en-US" ? "User" : "讀者提問") : (language === "en-US" ? "Coach" : "導讀教練")}
-              </span>
-            </div>
-          </div>
-        ))}
-
-        {/* Dynamic Typing indicators spinner */}
-        {isLoading && (
-          <div className="flex gap-3 max-w-[85%]">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold bg-natural-sand text-white font-serif italic animate-pulse">
-              AI
-            </div>
-            <div className="bg-natural-bg border border-natural-border p-4 rounded-2xl rounded-tl-none shadow-3xs">
-              <div className="flex gap-1.5 items-center justify-center py-1 px-2">
-                <span className="w-2 h-2 rounded-full bg-natural-sand animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2 h-2 rounded-full bg-natural-sand animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2 h-2 rounded-full bg-natural-sand animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Warning card for missing API config */}
-        {errorMsg && (
-          <div className="p-4 bg-[#FBF2F2] border border-rose-200 text-[#C15C5C] rounded-2xl flex gap-3 animate-fade-in max-w-[95%]">
-            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-            <div className="space-y-2.5">
-              <p className="text-sm font-semibold text-rose-900 font-serif">對話傳送失敗 (Error)</p>
-              <p className="text-xs text-rose-800 leading-relaxed">
-                {errorMsg}
+            <div className="space-y-2 max-w-sm">
+              <h4 className="font-serif font-bold text-[#6B705C] text-base">啟動瀏覽器本地 AI 伴讀教練</h4>
+              <p className="text-xs text-natural-sand leading-relaxed">
+                我們將在您的瀏覽器中加載 <b>Gemma 2B</b> 模型。這完全運行在您本機的 GPU 上，<b>100% 離線隱私安全</b>。
               </p>
             </div>
+
+            {webLLM.status.includes("正在") || webLLM.status.includes("Loading") || webLLM.progress > 0 ? (
+              <div className="w-full max-w-xs space-y-3">
+                <div className="w-full bg-[#FAF8F5] rounded-full h-2 border border-natural-border overflow-hidden relative">
+                  <div 
+                    className="bg-[#6B705C] h-full transition-all duration-300 rounded-full" 
+                    style={{ width: `${webLLM.progress}%` }} 
+                  />
+                </div>
+                <div className="flex justify-between items-center text-[10px] text-natural-sand font-mono">
+                  <span className="truncate max-w-[200px] text-left font-sans">{webLLM.status}</span>
+                  <span className="font-bold text-[#6B705C]">{webLLM.progress}%</span>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => webLLM.init()}
+                className="px-6 py-2.5 bg-[#6B705C] hover:bg-[#555849] text-white rounded-xl shadow-xs transition-all hover:scale-105 active:scale-95 font-serif font-bold text-xs cursor-pointer flex items-center gap-2"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-200 animate-spin" />
+                下載並啟動 AI 教練 (Gemma 2B)
+              </button>
+            )}
+
+            <div className="text-[10px] text-natural-sand/70 max-w-xs italic leading-tight">
+              首次使用需要下載約 1.4GB 權重資料，下載後會緩存於您的瀏覽器中，下次打開即是秒開。
+            </div>
           </div>
+        ) : (
+          <>
+            {messages.map((m) => (
+              <div
+                key={m.id}
+                className={`flex gap-3 max-w-[85%] ${
+                  m.role === "user" ? "ml-auto flex-row-reverse" : "mr-auto"
+                }`}
+              >
+                {/* Persona Avatar icons */}
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] font-mono leading-none shadow-3xs ${
+                    m.role === "user"
+                      ? "bg-natural-sage-dark text-[#FDFCF8]"
+                      : "bg-natural-sand text-white font-serif italic"
+                  }`}
+                >
+                  {m.role === "user" ? "Me" : "AI"}
+                </div>
+
+                {/* Bubble layout context */}
+                <div className="space-y-1">
+                  <div
+                    className={`p-4 rounded-2xl ${fontSizeClass} leading-relaxed whitespace-pre-line relative group ${
+                      m.role === "user"
+                        ? "bg-natural-sage text-[#FDFCF8] rounded-tr-none"
+                        : "bg-natural-bg text-natural-dark border border-natural-border rounded-tl-none shadow-3xs font-serif"
+                    }`}
+                  >
+                    {m.content}
+                    
+                    {m.role === "assistant" && m.content && (
+                      <button 
+                        onClick={() => speakText(m.content)}
+                        className="absolute -right-8 bottom-0 p-1.5 text-natural-sand hover:text-natural-sage opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="朗讀 (Read Aloud)"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-natural-sand block px-1.5 font-mono tracking-wider">
+                    {m.role === "user" ? (language === "en-US" ? "User" : "讀者提問") : (language === "en-US" ? "Coach" : "導讀教練")}
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Dynamic Typing indicators spinner */}
+            {isLoading && (
+              <div className="flex gap-3 max-w-[85%] animate-fade-in">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold bg-natural-sand text-white font-serif italic animate-pulse">
+                  AI
+                </div>
+                <div className="bg-natural-bg border border-natural-border p-4 rounded-2xl rounded-tl-none shadow-3xs">
+                  <div className="flex gap-1.5 items-center justify-center py-1 px-2">
+                    <span className="w-2 h-2 rounded-full bg-natural-sand animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2 h-2 rounded-full bg-natural-sand animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2 h-2 rounded-full bg-natural-sand animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Warning card for missing API config */}
+            {errorMsg && (
+              <div className="p-4 bg-[#FBF2F2] border border-rose-200 text-[#C15C5C] rounded-2xl flex gap-3 animate-fade-in max-w-[95%]">
+                <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="space-y-2.5">
+                  <p className="text-sm font-semibold text-rose-900 font-serif">對話傳送失敗 (Error)</p>
+                  <p className="text-xs text-rose-800 leading-relaxed font-sans">
+                    {errorMsg}
+                  </p>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <div ref={chatEndRef} />
       </div>
 
       {/* Suggested question pills */}
-      {messages.length <= 3 && !isLoading && (
-        <div className="px-6 py-3 border-t border-natural-border bg-natural-bg shrink-0 select-none">
+      {messages.length <= 3 && !isLoading && !isLocalPending && (
+        <div className="px-6 py-3 border-t border-natural-border bg-natural-bg shrink-0 select-none animate-fade-in">
           <p className="text-[10px] font-bold text-natural-sand flex items-center gap-1.5 mb-2 uppercase tracking-wider font-mono">
             <HelpCircle className="w-3.5 h-3.5 text-natural-sand" />
             {language === "en-US" ? "You can ask:" : "您可以這樣與伴讀教練展開深度討論："}
@@ -419,7 +515,8 @@ ${book.readingGuide}
         <button
           type="button"
           onClick={toggleListening}
-          className={`p-3 rounded-xl shadow-xs transition-colors shrink-0 ${isListening ? "bg-red-500 text-white animate-pulse" : "bg-natural-warm text-natural-dark hover:bg-natural-border"}`}
+          disabled={isLoading || isListening || isLocalPending}
+          className={`p-3 rounded-xl shadow-xs transition-colors shrink-0 disabled:opacity-30 disabled:cursor-not-allowed ${isListening ? "bg-red-500 text-white animate-pulse" : "bg-natural-warm text-natural-dark hover:bg-natural-border"}`}
           title="語音輸入 (Voice Input)"
         >
           <Mic className="w-4 h-4" />
@@ -428,14 +525,18 @@ ${book.readingGuide}
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={language === "en-US" ? "Ask a question..." : `對《${book.title}》提出問題...`}
-          disabled={isLoading || isListening}
+          placeholder={
+            isLocalPending 
+              ? (language === "en-US" ? "Please start Local AI first..." : "請先啟動本地 AI 教練...") 
+              : (language === "en-US" ? "Ask a question..." : `對《${book.title}》提出問題...`)
+          }
+          disabled={isLoading || isListening || isLocalPending}
           className={`flex-1 bg-natural-warm border border-natural-border focus:border-natural-sage focus:bg-natural-bg rounded-xl px-4 py-3 ${fontSizeClass} text-natural-dark placeholder-natural-sand focus:outline-none focus:ring-1 focus:ring-natural-sage disabled:opacity-50 transition-all font-sans`}
         />
         <button
           type="submit"
-          disabled={!input.trim() || isLoading}
-          className="p-3 bg-natural-sage hover:bg-natural-sage-dark text-white rounded-xl shadow-xs disabled:bg-natural-warm disabled:text-natural-sand transition-colors cursor-pointer shrink-0"
+          disabled={!input.trim() || isLoading || isLocalPending}
+          className="p-3 bg-natural-sage hover:bg-natural-sage-dark text-white rounded-xl shadow-xs disabled:bg-natural-warm disabled:text-natural-sand transition-colors cursor-pointer shrink-0 disabled:cursor-not-allowed"
         >
           <Send className="w-4 h-4" />
         </button>
@@ -443,3 +544,4 @@ ${book.readingGuide}
     </div>
   );
 }
+

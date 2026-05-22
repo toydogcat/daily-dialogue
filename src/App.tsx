@@ -4,6 +4,7 @@ import ChatBox from "./components/ChatBox";
 import BlogView from "./components/BlogView";
 import { Book, booksData } from "./booksData";
 import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, Calendar, ChevronRight, Settings, X } from "lucide-react";
+import { useWebLLM } from "./hooks/useWebLLM";
 
 export default function App() {
   // Application State
@@ -27,6 +28,16 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("gemini_api_key", geminiKey);
   }, [geminiKey]);
+
+  const [aiEngine, setAiEngine] = useState<"gemini" | "local">(() => {
+    return (localStorage.getItem("daily_dialogue_ai_engine") as "gemini" | "local") || "gemini";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("daily_dialogue_ai_engine", aiEngine);
+  }, [aiEngine]);
+
+  const webLLM = useWebLLM();
 
   // Sync dark mode
   useEffect(() => {
@@ -129,6 +140,19 @@ export default function App() {
             
             <div className="space-y-4">
               <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-natural-dark">AI 運算引擎 (AI Engine)</span>
+                <select value={aiEngine} onChange={e => setAiEngine(e.target.value as any)} className="bg-natural-warm border border-natural-border rounded-lg px-3 py-1 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C]">
+                  <option value="gemini">雲端 Gemini API (極速)</option>
+                  <option value="local">瀏覽器本地 WebGPU (離線/隱私)</option>
+                </select>
+              </div>
+              {aiEngine === "local" && (
+                <div className="p-3 bg-[#FAF8F5] rounded-xl border border-natural-border text-[11px] text-[#8B8372] leading-relaxed animate-fade-in">
+                  <p className="font-bold text-natural-dark mb-1">💡 本地 AI (Gemma 2B) 運作提示</p>
+                  <p>本地引擎完全運行在您的瀏覽器與 GPU 中，不消耗任何網路金鑰，100% 離線隱私安全。首次使用將會在對話視窗下載模型權重（約 1.4GB），下載後即可永久快速離線使用！</p>
+                </div>
+              )}
+              <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-natural-dark">主題模式 (Theme)</span>
                 <select value={theme} onChange={e => setTheme(e.target.value as any)} className="bg-natural-warm border border-natural-border rounded-lg px-3 py-1 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C]">
                   <option value="light">白天 (Light)</option>
@@ -157,17 +181,19 @@ export default function App() {
                   <option value="large">大 (Large)</option>
                 </select>
               </div>
-              <div className="pt-4 border-t border-natural-border mt-4">
-                <label className="block text-sm font-medium text-natural-dark mb-2">Gemini API Key</label>
-                <input 
-                  type="password" 
-                  value={geminiKey} 
-                  onChange={e => setGeminiKey(e.target.value)} 
-                  placeholder="AI 對話必須填寫 (儲存於本地)"
-                  className="w-full bg-natural-warm border border-natural-border rounded-lg px-3 py-2 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C] placeholder:text-natural-sand"
-                />
-                <p className="text-[10px] text-natural-sand mt-1">金鑰僅會儲存在您的瀏覽器中，不會上傳到任何伺服器。</p>
-              </div>
+              {aiEngine === "gemini" && (
+                <div className="pt-4 border-t border-natural-border mt-4 animate-fade-in">
+                  <label className="block text-sm font-medium text-natural-dark mb-2">Gemini API Key</label>
+                  <input 
+                    type="password" 
+                    value={geminiKey} 
+                    onChange={e => setGeminiKey(e.target.value)} 
+                    placeholder="AI 對話必須填寫 (儲存於本地)"
+                    className="w-full bg-natural-warm border border-natural-border rounded-lg px-3 py-2 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C] placeholder:text-natural-sand"
+                  />
+                  <p className="text-[10px] text-natural-sand mt-1">金鑰僅會儲存在您的瀏覽器中，不會上傳到任何伺服器。</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -336,6 +362,8 @@ export default function App() {
                     aiVoice={aiVoice}
                     fontSize={fontSize}
                     geminiKey={geminiKey}
+                    aiEngine={aiEngine}
+                    webLLM={webLLM}
                   />
                 ) : (
                   <BlogView book={bookDetail} />
