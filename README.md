@@ -1,2 +1,4 @@
-# daily-dialogue
-Daily Dialogue.
+# Web
+
+[Demo](https://toydogcat.github.io/daily-dialogue/)
+

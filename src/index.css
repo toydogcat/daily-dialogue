@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-natural-bg: var(--color-natural-bg-var);
+  --color-natural-cream: var(--color-natural-cream-var);
+  --color-natural-warm: var(--color-natural-warm-var);
+  --color-natural-border: var(--color-natural-border-var);
+  --color-natural-sage: var(--color-natural-sage-var);
+  --color-natural-dark: var(--color-natural-dark-var);
+  --color-natural-sage-dark: var(--color-natural-sage-dark-var);
+  --color-natural-sand: var(--color-natural-sand-var);
+  --color-natural-sand-light: var(--color-natural-sand-light-var);
+
+  --font-serif: "Lora", Georgia, serif;
+  --font-heading: "Lora", "Outfit", "Inter", sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+:root {
+  --color-natural-bg-var: #FDFCF8;
+  --color-natural-cream-var: #F9F7F2;
+  --color-natural-warm-var: #F5F2ED;
+  --color-natural-border-var: #EBE6DE;
+  --color-natural-sage-var: #6B705C;
+  --color-natural-dark-var: #3C3836;
+  --color-natural-sage-dark-var: #5A5A40;
+  --color-natural-sand-var: #8B8372;
+  --color-natural-sand-light-var: #A8A296;
+}
+
+.dark {
+  --color-natural-bg-var: #1A1A1A;
+  --color-natural-cream-var: #2A2A2A;
+  --color-natural-warm-var: #333333;
+  --color-natural-border-var: #404040;
+  --color-natural-sage-var: #8A9A5B;
+  --color-natural-dark-var: #FDFCF8;
+  --color-natural-sage-dark-var: #A8B87B;
+  --color-natural-sand-var: #D1CFC0;
+  --color-natural-sand-light-var: #E6E4D8;
+}
+
+/* Custom CSS Scrollbars with Natural Tones */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #EBE6DE;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #8B8372;
+}
+
+/* Dynamic ambient fade in animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}

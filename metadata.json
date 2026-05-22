@@ -1,0 +1,6 @@
+{
+  "name": "每天對話一本書",
+  "description": "每天精選一本書，提供對話與部落格雙模式，引導你深入吸收書籍的精華觀點。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
