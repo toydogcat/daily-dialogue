@@ -42,7 +42,13 @@ export default function ChatBox({
   // Suggestion questions specific to each book to spark users' interest
   const getSuggestions = () => {
     if (language === "en-US") {
-      if (book.id === "2026-05-21") {
+      if (book.id === "2026-05-20") {
+        return [
+          "What is 'Career Capital' and how do I build it?",
+          "Why is 'following your passion' dangerous advice?",
+          "What are the Control Traps and how do I avoid them?"
+        ];
+      } else if (book.id === "2026-05-21") {
         return [
           "What is the Satir Iceberg Model?",
           "How to respond when an employee is blaming others?",
@@ -56,7 +62,13 @@ export default function ChatBox({
         ];
       }
     } else {
-      if (book.id === "2026-05-21") {
+      if (book.id === "2026-05-20") {
+        return [
+          "什麼是「職涯資本」？我該如何透過刻意練習累積它？",
+          "為什麼「追隨熱情」是個危險的職涯迷思？",
+          "什麼是「自主權陷阱」？要如何避免在實力不足時掉入其中？"
+        ];
+      } else if (book.id === "2026-05-21") {
         return [
           "什麼是薩提爾冰山理論？能舉一個經典職場例子嗎？",
           "員工擺出「超理智」或「指責」姿態時，主管該如何提問？",
@@ -74,17 +86,24 @@ export default function ChatBox({
 
   // Prepopulate with a friendly introductory message from the AI Coach
   useEffect(() => {
-    const isSatir = book.id === "2026-05-21";
     let welcomeText = "";
     
     if (language === "en-US") {
-      welcomeText = isSatir 
-        ? `Hello! I am your dedicated study coach for "${book.title}". How can we apply the Satir model to your work today?`
-        : `Welcome! I am your coach for "${book.title}". Let's dive into the power of storytelling today!`;
+      if (book.id === "2026-05-20") {
+        welcomeText = `Hello! I am your dedicated study coach for "${book.title}". How can we build your career capital and escape the passion trap today?`;
+      } else if (book.id === "2026-05-21") {
+        welcomeText = `Hello! I am your dedicated study coach for "${book.title}". How can we apply the Satir model to your work today?`;
+      } else {
+        welcomeText = `Welcome! I am your coach for "${book.title}". Let's dive into the power of storytelling today!`;
+      }
     } else {
-      welcomeText = isSatir
-        ? `您好！我是您的專屬《激發員工潛力的薩提爾教練模式》讀書伴侶 📚。今天想探討什麼呢？`
-        : `歡迎到來！我是您的專屬《會說故事的巧實力！》導學教練 🌟。讓我們開始吧！`;
+      if (book.id === "2026-05-20") {
+        welcomeText = `您好！我是您的專屬《深度職場力》導學教練 📚。今天想探討如何累積職涯資本、把自己變強，還是避開自主權陷阱呢？`;
+      } else if (book.id === "2026-05-21") {
+        welcomeText = `您好！我是您的專屬《激發員工潛力的薩提爾教練模式》讀書伴侶 📚。今天想探討什麼呢？`;
+      } else {
+        welcomeText = `歡迎到來！我是您的專屬《會說故事的巧實力！》導學教練 🌟。讓我們開始吧！`;
+      }
     }
 
     setMessages([
@@ -244,10 +263,18 @@ ${book.readingGuide}
 
   const handleClearHistory = () => {
     if (confirm("要重置這本書的對話歷史嗎？ (Reset chat history?)")) {
-      const isSatir = book.id === "2026-05-21";
-      const initialText = language === "en-US" 
-        ? "History cleared! Let's start over."
-        : (isSatir ? "重置完成！重新向您的薩提爾讀書客座教練提問吧。" : "重置完成！讓我們重新探討說故事的巧實力吧。");
+      let initialText = "";
+      if (language === "en-US") {
+        initialText = "History cleared! Let's start over.";
+      } else {
+        if (book.id === "2026-05-20") {
+          initialText = "重置完成！讓我們重新探討如何專心把自己變強吧。";
+        } else if (book.id === "2026-05-21") {
+          initialText = "重置完成！重新向您的薩提爾讀書客座教練提問吧。";
+        } else {
+          initialText = "重置完成！讓我們重新探討說故事的巧實力吧。";
+        }
+      }
       setMessages([
         {
           id: `cleared-${Date.now()}`,
