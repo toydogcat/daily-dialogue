@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Book, booksData } from "../booksData";
+import { Book } from "../booksData";
 import { Send, Sparkles, RefreshCw, AlertCircle, HelpCircle, ArrowRight, Mic, Volume2 } from "lucide-react";
 import { useWebLLM } from "../hooks/useWebLLM";
 
@@ -10,6 +10,7 @@ interface Message {
 }
 
 interface GuideChatBoxProps {
+  books: Book[];
   language: "zh-TW" | "en-US";
   aiVoice: "male" | "female";
   fontSize: "small" | "medium" | "large";
@@ -20,6 +21,7 @@ interface GuideChatBoxProps {
 }
 
 export default function GuideChatBox({
+  books,
   language,
   aiVoice,
   fontSize,
@@ -82,7 +84,7 @@ export default function GuideChatBox({
       const targetLanguage = language === 'en-US' ? 'English' : '繁體中文 (Traditional Chinese / 台灣地區用語習慣)';
       
       // Compile all books metadata as AI context
-      const booksContextStr = booksData.map(b => 
+      const booksContextStr = books.map(b => 
         `- 書籍 ID (ID): "${b.id}"\n  書名: 《${b.title}》\n  作者: ${b.author}\n  分類: ${b.category}\n  核心精華: ${b.coreTakeaway}\n  適合對象: ${b.targetAudience.join(", ")}`
       ).join("\n\n");
 
@@ -268,7 +270,7 @@ ${booksContextStr}
       const match = part.match(/\[BOOK:(.*?)\]/);
       if (match) {
         const bookId = match[1].trim();
-        const book = booksData.find(b => b.id === bookId);
+        const book = books.find(b => b.id === bookId);
         if (book) {
           return (
             <button

@@ -9,7 +9,6 @@ import { useWebLLM } from "./hooks/useWebLLM";
 
 export default function App() {
   // Application State
-  const [books, setBooks] = useState<any[]>([]);
   const [selectedBookId, setSelectedBookId] = useState<string | null>(null);
   const [bookDetail, setBookDetail] = useState<Book | null>(null);
   const [activeMode, setActiveMode] = useState<"chat" | "blog">("chat");
@@ -23,6 +22,14 @@ export default function App() {
   const [language, setLanguage] = useState<"zh-TW" | "en-US">("zh-TW");
   const [aiVoice, setAiVoice] = useState<"male" | "female">("female");
   const [fontSize, setFontSize] = useState<"small" | "medium" | "large">("medium");
+  const [showFutureBooks, setShowFutureBooks] = useState<boolean>(() => {
+    return localStorage.getItem("daily_dialogue_show_future_books") === "true";
+  });
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem("daily_dialogue_show_future_books", String(showFutureBooks));
+  }, [showFutureBooks]);
 
   const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem("gemini_api_key") || "");
 
@@ -66,9 +73,46 @@ export default function App() {
 
   // Load books overview on mount
   useEffect(() => {
-    setBooks(booksData);
     setLoadingList(false);
   }, []);
+
+  // Filter books by date and showFutureBooks, and sort descending
+  const processedBooks = React.useMemo(() => {
+    return booksData
+      .filter((b) => {
+        if (showFutureBooks) return true;
+        return b.date <= "2026-05-23";
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [showFutureBooks]);
+
+  // Compute all unique tags from processedBooks
+  const allTags = React.useMemo(() => {
+    const tagsSet = new Set<string>();
+    processedBooks.forEach((b) => {
+      if (b.tags) {
+        b.tags.forEach((t) => tagsSet.add(t));
+      }
+    });
+    return Array.from(tagsSet);
+  }, [processedBooks]);
+
+  // Filter books by selectedTag and searchQuery
+  const filteredBooks = React.useMemo(() => {
+    return processedBooks.filter((b) => {
+      const matchesTag = !selectedTag || (b.tags && b.tags.includes(selectedTag));
+      
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = 
+        b.title.toLowerCase().includes(q) ||
+        b.author.toLowerCase().includes(q) ||
+        b.category.toLowerCase().includes(q) ||
+        b.description.toLowerCase().includes(q) ||
+        b.date.includes(q);
+        
+      return matchesTag && matchesSearch;
+    });
+  }, [processedBooks, selectedTag, searchQuery]);
 
   // Handle entering a specific day / book detail page
   const handleSelectBook = (id: string, initialMode: "chat" | "blog" = "chat") => {
@@ -90,18 +134,6 @@ export default function App() {
     setSelectedBookId(null);
     setBookDetail(null);
   };
-
-  // Filter books by searchQuery
-  const filteredBooks = books.filter((b) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      b.title.toLowerCase().includes(q) ||
-      b.author.toLowerCase().includes(q) ||
-      b.category.toLowerCase().includes(q) ||
-      b.description.toLowerCase().includes(q) ||
-      b.date.includes(q)
-    );
-  });
 
   return (
     <div className="min-h-screen bg-natural-bg text-natural-dark font-sans flex flex-col justify-between">
@@ -204,6 +236,22 @@ export default function App() {
                   <option value="large">大 (Large)</option>
                 </select>
               </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-natural-dark font-serif">顯示未來書籍 (Show Future)</span>
+                <button
+                  type="button"
+                  onClick={() => setShowFutureBooks(!showFutureBooks)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    showFutureBooks ? "bg-[#6B705C]" : "bg-natural-warm border border-natural-border"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                      showFutureBooks ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
               {aiEngine === "gemini" && (
                 <div className="pt-4 border-t border-natural-border mt-4 animate-fade-in">
                   <label className="block text-sm font-medium text-natural-dark mb-2">Gemini API Key</label>
@@ -288,22 +336,56 @@ export default function App() {
             {activeOverviewTab === "blog" ? (
               <div className="space-y-8 animate-fade-in">
                 {/* Tool search & Filter bar */}
-                <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-natural-bg p-4 rounded-2xl border border-natural-border shadow-3xs">
-                  <div className="relative w-full sm:max-w-md">
-                    <Search className="w-4 h-4 text-natural-sand absolute left-3.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="搜尋書名、作者、章節觀點或日期..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-natural-warm border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
-                    />
+                <div className="flex flex-col gap-4 bg-natural-bg p-4 rounded-2xl border border-natural-border shadow-3xs">
+                  <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                    <div className="relative w-full sm:max-w-md">
+                      <Search className="w-4 h-4 text-natural-sand absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        placeholder="搜尋書名、作者、章節觀點或日期..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-natural-warm border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-natural-sand uppercase tracking-wider self-end sm:self-auto shrink-0">
+                      <ListFilter className="w-3.5 h-3.5" />
+                      <span>顯示：{filteredBooks.length} 本精選書目</span>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-natural-sand uppercase tracking-wider self-end sm:self-auto shrink-0">
-                    <ListFilter className="w-3.5 h-3.5" />
-                    <span>顯示：{filteredBooks.length} 本精選書目</span>
-                  </div>
+                  {/* Horizontal Tags Filter */}
+                  {allTags.length > 0 && (
+                    <div className="flex items-center gap-2 border-t border-natural-border/40 pt-3 overflow-x-auto no-scrollbar scroll-smooth">
+                      <span className="text-[10px] font-bold text-natural-sand font-mono uppercase tracking-wider shrink-0">主題標籤:</span>
+                      <div className="flex gap-1.5 items-center overflow-x-auto no-scrollbar">
+                        <button
+                          onClick={() => setSelectedTag(null)}
+                          className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer whitespace-nowrap ${
+                            !selectedTag
+                              ? "bg-[#6B705C] text-[#FDFCF8] border-[#6B705C]"
+                              : "bg-natural-warm text-natural-sand border-natural-border hover:text-natural-dark hover:border-natural-sand-light"
+                          }`}
+                        >
+                          全部
+                        </button>
+                        {allTags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
+                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer whitespace-nowrap ${
+                              tag === selectedTag
+                                ? "bg-[#6B705C] text-[#FDFCF8] border-[#6B705C]"
+                                : "bg-natural-warm text-natural-sand border-natural-border hover:text-natural-dark hover:border-natural-sand-light"
+                            }`}
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* List of Books Cards */}
@@ -331,10 +413,13 @@ export default function App() {
                   <div className="text-center py-20 bg-natural-bg rounded-3xl border border-dashed border-natural-border space-y-4">
                     <p className="text-natural-sand text-sm font-serif">找不到符合搜尋條件的每日書目...</p>
                     <button
-                      onClick={() => setSearchQuery("")}
+                      onClick={() => {
+                        setSearchQuery("");
+                        setSelectedTag(null);
+                      }}
                       className="text-xs text-[#6B705C] font-bold underline cursor-pointer"
                     >
-                      清除搜尋
+                      清除篩選與搜尋
                     </button>
                   </div>
                 )}
@@ -342,6 +427,7 @@ export default function App() {
             ) : (
               <div className="animate-fade-in max-w-4xl mx-auto w-full">
                 <GuideChatBox
+                  books={processedBooks}
                   language={language}
                   aiVoice={aiVoice}
                   fontSize={fontSize}

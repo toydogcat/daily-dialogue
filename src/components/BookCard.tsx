@@ -13,6 +13,7 @@ interface BookCardProps {
     coverGradient: string;
     description: string;
     coreTakeaway: string;
+    tags?: string[];
   };
   onSelect: (id: string, initialMode?: "chat" | "blog") => void;
 }
@@ -78,6 +79,19 @@ export default function BookCard({ book, onSelect }: BookCardProps) {
               </div>
             </div>
           </div>
+
+          {book.tags && book.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {book.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-natural-warm text-natural-sand border border-natural-border/40"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Action Button Section split into Chat or Blog */}
