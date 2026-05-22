@@ -163,7 +163,7 @@ export default function App() {
                 </select>
               </div>
               {aiEngine === "local" && (
-                <div className="p-3 bg-[#FAF8F5] rounded-xl border border-natural-border text-[11px] text-[#8B8372] leading-relaxed animate-fade-in">
+                <div className="p-3 bg-natural-warm rounded-xl border border-natural-border text-[11px] text-[#8B8372] leading-relaxed animate-fade-in">
                   <p className="font-bold text-natural-dark mb-1">💡 本地 AI (Gemma 2B) 運作提示</p>
                   <p>本地引擎完全運行在您的瀏覽器與 GPU 中，不消耗 any 網路金鑰，100% 離線隱私安全。首次使用將會在對話視窗下載模型權重（約 1.4GB），下載後即可永久快速離線使用！</p>
                 </div>
@@ -296,7 +296,7 @@ export default function App() {
                       placeholder="搜尋書名、作者、章節觀點或日期..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full bg-[#FBF9F5] border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
+                      className="w-full bg-natural-warm border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
                     />
                   </div>
 
@@ -437,7 +437,7 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <div className="text-center py-20 bg-white rounded-3xl border border-natural-border space-y-4">
+              <div className="text-center py-20 bg-natural-bg rounded-3xl border border-natural-border space-y-4">
                 <p className="text-natural-sand text-sm font-serif">未能成功調用書本詳細結構，可能正因連線阻礙...</p>
                 <button
                   onClick={handleBackToOverview}

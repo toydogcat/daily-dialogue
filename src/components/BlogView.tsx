@@ -21,7 +21,7 @@ export default function BlogView({ book }: BlogViewProps) {
     <div className="max-w-4xl mx-auto space-y-10 pb-16 animate-fade-in" id="blog-view">
       
       {/* Header Splash Area */}
-      <div className="bg-white rounded-3xl border border-natural-border p-6 md:p-8 shadow-2xs flex flex-col md:flex-row gap-8 items-start relative overflow-hidden">
+      <div className="bg-natural-bg rounded-3xl border border-natural-border p-6 md:p-8 shadow-2xs flex flex-col md:flex-row gap-8 items-start relative overflow-hidden">
         {/* Left vertical border brand line */}
         <div className="absolute top-0 left-0 w-2 h-full bg-[#6B705C]" />
         
@@ -100,7 +100,7 @@ export default function BlogView({ book }: BlogViewProps) {
                 className={`p-5 rounded-2xl border transition-all duration-300 cursor-pointer ${
                   activeConceptIdx === idx
                     ? "bg-natural-cream border-natural-sage shadow-2xs"
-                    : "bg-white border-natural-border hover:border-natural-sand-light"
+                    : "bg-natural-bg border-natural-border hover:border-natural-sand-light"
                 }`}
                 onClick={() => setActiveConceptIdx(idx)}
               >
@@ -138,7 +138,7 @@ export default function BlogView({ book }: BlogViewProps) {
             <h4 className="text-lg font-serif font-bold text-natural-dark">章節大綱隨讀</h4>
           </div>
 
-          <div className="bg-white rounded-2xl border border-natural-border p-5 space-y-6 shadow-2xs">
+          <div className="bg-natural-bg rounded-2xl border border-natural-border p-5 space-y-6 shadow-2xs">
             {book.chapters.map((ch, idx) => (
               <div key={idx} className="relative pl-6 last:pb-0 pb-6 border-l border-natural-border/80 last:border-0 group">
                 {/* timeline node icon */}
@@ -157,7 +157,7 @@ export default function BlogView({ book }: BlogViewProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
         {/* Readers Group */}
-        <div className="bg-white rounded-3xl p-6.5 border border-natural-border space-y-4">
+        <div className="bg-natural-bg rounded-3xl p-6.5 border border-natural-border space-y-4">
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-natural-sage" />
             <h4 className="font-serif font-bold text-natural-dark text-base">這本書最適合推薦給：</h4>

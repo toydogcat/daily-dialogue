@@ -32,7 +32,7 @@ export default function BookCard({ book, onSelect }: BookCardProps) {
   return (
     <div
       id={`book-card-${book.id}`}
-      className="group bg-white rounded-2xl border border-natural-border hover:border-natural-sand-light shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full"
+      className="group bg-natural-bg rounded-2xl border border-natural-border hover:border-natural-sand-light shadow-xs hover:shadow-md transition-all duration-300 overflow-hidden flex flex-col h-full"
     >
       {/* Visual Cover Header */}
       <div className={`relative px-6 py-8 ${getNaturalHeaderBg()} text-white flex flex-col justify-between h-48 overflow-hidden`}>
@@ -61,7 +61,7 @@ export default function BookCard({ book, onSelect }: BookCardProps) {
       </div>
 
       {/* Content Area */}
-      <div className="p-6 flex-1 flex flex-col justify-between bg-[#FDFCF8]">
+      <div className="p-6 flex-1 flex flex-col justify-between bg-natural-bg">
         <div className="space-y-4">
           <p className="text-natural-dark/90 text-sm leading-relaxed line-clamp-3">
             {book.description}
