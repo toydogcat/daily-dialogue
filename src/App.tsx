@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import BookCard from "./components/BookCard";
 import ChatBox from "./components/ChatBox";
 import BlogView from "./components/BlogView";
+import GuideChatBox from "./components/GuideChatBox";
 import { Book, booksData } from "./booksData";
-import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, Calendar, ChevronRight, Settings, X } from "lucide-react";
+import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, ChevronRight, Settings, X } from "lucide-react";
 import { useWebLLM } from "./hooks/useWebLLM";
 
 export default function App() {
@@ -36,6 +37,21 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem("daily_dialogue_ai_engine", aiEngine);
   }, [aiEngine]);
+
+  const [defaultHomeStyle, setDefaultHomeStyle] = useState<"blog" | "guide">(() => {
+    return (localStorage.getItem("daily_dialogue_default_home_style") as "blog" | "guide") || "blog";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("daily_dialogue_default_home_style", defaultHomeStyle);
+  }, [defaultHomeStyle]);
+
+  const [activeOverviewTab, setActiveOverviewTab] = useState<"blog" | "guide">(defaultHomeStyle);
+
+  // Sync active overview tab when user changes the default style in settings
+  useEffect(() => {
+    setActiveOverviewTab(defaultHomeStyle);
+  }, [defaultHomeStyle]);
 
   const webLLM = useWebLLM();
 
@@ -149,9 +165,16 @@ export default function App() {
               {aiEngine === "local" && (
                 <div className="p-3 bg-[#FAF8F5] rounded-xl border border-natural-border text-[11px] text-[#8B8372] leading-relaxed animate-fade-in">
                   <p className="font-bold text-natural-dark mb-1">💡 本地 AI (Gemma 2B) 運作提示</p>
-                  <p>本地引擎完全運行在您的瀏覽器與 GPU 中，不消耗任何網路金鑰，100% 離線隱私安全。首次使用將會在對話視窗下載模型權重（約 1.4GB），下載後即可永久快速離線使用！</p>
+                  <p>本地引擎完全運行在您的瀏覽器與 GPU 中，不消耗 any 網路金鑰，100% 離線隱私安全。首次使用將會在對話視窗下載模型權重（約 1.4GB），下載後即可永久快速離線使用！</p>
                 </div>
               )}
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-natural-dark">預設首頁風格 (Default Home)</span>
+                <select value={defaultHomeStyle} onChange={e => setDefaultHomeStyle(e.target.value as any)} className="bg-natural-warm border border-natural-border rounded-lg px-3 py-1 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C]">
+                  <option value="blog">部落格書庫風 (Blog Cards)</option>
+                  <option value="guide">智慧 AI 館長導讀 (AI Curator)</option>
+                </select>
+              </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm font-medium text-natural-dark">主題模式 (Theme)</span>
                 <select value={theme} onChange={e => setTheme(e.target.value as any)} className="bg-natural-warm border border-natural-border rounded-lg px-3 py-1 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C]">
@@ -219,7 +242,7 @@ export default function App() {
                   不只是閱讀，<span className="text-[#6B705C] italic font-medium">用對話</span>吸乾一本書的精華
                 </h2>
                 <p className="text-natural-sand text-sm md:text-base leading-relaxed">
-                  每天精選一本職場、領導或表達好書。我們提供 <strong className="text-natural-dark">Blog 模式</strong> 供您快覽大綱大架構；更特別提供 <strong className="text-natural-dark">對話模式</strong>，餵書內容給 AI 教練，讓您用聊的、用問的快速破關落實！
+                  每天精選一本職場、領導或表達好書。我們提供 <strong className="text-natural-dark">Blog 模式</strong> 供您快覽大綱大架構；更特別提供 <strong className="text-natural-dark">對話模式</strong>，餵書內容給 AI 教練，讓您用聊的、用問的快速落實！
                 </p>
               </div>
 
@@ -234,55 +257,99 @@ export default function App() {
               </div>
             </div>
 
-            {/* Tool search & Filter bar */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-natural-bg p-4 rounded-2xl border border-natural-border shadow-3xs">
-              <div className="relative w-full sm:max-w-md">
-                <Search className="w-4 h-4 text-natural-sand absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="搜尋書名、作者、章節觀點或日期..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#FBF9F5] border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
-                />
-              </div>
-
-              <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-natural-sand uppercase tracking-wider self-end sm:self-auto shrink-0">
-                <ListFilter className="w-3.5 h-3.5" />
-                <span>顯示：{filteredBooks.length} 本精選書目</span>
+            {/* Overview View Tabs Controller */}
+            <div className="flex justify-center select-none animate-fade-in">
+              <div className="bg-natural-warm/80 border border-natural-border p-1 rounded-2xl flex shadow-3xs">
+                <button
+                  onClick={() => setActiveOverviewTab("blog")}
+                  className={`flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    activeOverviewTab === "blog"
+                      ? "bg-[#6B705C] text-[#FDFCF8] shadow-3xs scale-105"
+                      : "text-natural-sand hover:text-natural-dark"
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  部落格書庫風
+                </button>
+                <button
+                  onClick={() => setActiveOverviewTab("guide")}
+                  className={`flex items-center justify-center gap-2 px-6 py-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                    activeOverviewTab === "guide"
+                      ? "bg-[#6B705C] text-[#FDFCF8] shadow-3xs scale-105"
+                      : "text-natural-sand hover:text-natural-dark"
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 text-amber-200" />
+                  智慧 AI 圖書館長
+                </button>
               </div>
             </div>
 
-            {/* List of Books Cards */}
-            {loadingList ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-12">
-                {[1, 2].map((n) => (
-                  <div key={n} className="bg-natural-bg rounded-2xl border border-natural-border p-8 space-y-4 animate-pulse h-80">
-                    <div className="h-6 w-1/3 bg-[#F5F2ED] rounded" />
-                    <div className="h-10 w-2/3 bg-[#F5F2ED] rounded" />
-                    <div className="h-20 bg-[#F9F7F2]/60 rounded" />
+            {activeOverviewTab === "blog" ? (
+              <div className="space-y-8 animate-fade-in">
+                {/* Tool search & Filter bar */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-natural-bg p-4 rounded-2xl border border-natural-border shadow-3xs">
+                  <div className="relative w-full sm:max-w-md">
+                    <Search className="w-4 h-4 text-natural-sand absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="搜尋書名、作者、章節觀點或日期..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-[#FBF9F5] border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
+                    />
                   </div>
-                ))}
-              </div>
-            ) : filteredBooks.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {filteredBooks.map((book) => (
-                  <BookCard
-                    key={book.id}
-                    book={book}
-                    onSelect={handleSelectBook}
-                  />
-                ))}
+
+                  <div className="flex items-center gap-2 text-[10px] font-mono font-bold text-natural-sand uppercase tracking-wider self-end sm:self-auto shrink-0">
+                    <ListFilter className="w-3.5 h-3.5" />
+                    <span>顯示：{filteredBooks.length} 本精選書目</span>
+                  </div>
+                </div>
+
+                {/* List of Books Cards */}
+                {loadingList ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-12">
+                    {[1, 2].map((n) => (
+                      <div key={n} className="bg-natural-bg rounded-2xl border border-natural-border p-8 space-y-4 animate-pulse h-80">
+                        <div className="h-6 w-1/3 bg-[#F5F2ED] rounded" />
+                        <div className="h-10 w-2/3 bg-[#F5F2ED] rounded" />
+                        <div className="h-20 bg-[#F9F7F2]/60 rounded" />
+                      </div>
+                    ))}
+                  </div>
+                ) : filteredBooks.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {filteredBooks.map((book) => (
+                      <BookCard
+                        key={book.id}
+                        book={book}
+                        onSelect={handleSelectBook}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-20 bg-natural-bg rounded-3xl border border-dashed border-natural-border space-y-4">
+                    <p className="text-natural-sand text-sm font-serif">找不到符合搜尋條件的每日書目...</p>
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="text-xs text-[#6B705C] font-bold underline cursor-pointer"
+                    >
+                      清除搜尋
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-center py-20 bg-natural-bg rounded-3xl border border-dashed border-natural-border space-y-4">
-                <p className="text-natural-sand text-sm font-serif">找不到符合搜尋條件的每日書目...</p>
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="text-xs text-[#6B705C] font-bold underline cursor-pointer"
-                >
-                  清除清除搜尋
-                </button>
+              <div className="animate-fade-in max-w-4xl mx-auto w-full">
+                <GuideChatBox
+                  language={language}
+                  aiVoice={aiVoice}
+                  fontSize={fontSize}
+                  geminiKey={geminiKey}
+                  aiEngine={aiEngine}
+                  webLLM={webLLM}
+                  onSelectBook={handleSelectBook}
+                />
               </div>
             )}
 
