@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import BookCard from "./components/BookCard";
 import ChatBox from "./components/ChatBox";
 import BlogView from "./components/BlogView";
-import { Book } from "./booksData";
+import { Book, booksData } from "./booksData";
 import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, Calendar, ChevronRight, Settings, X } from "lucide-react";
 
 export default function App() {
@@ -22,6 +22,12 @@ export default function App() {
   const [aiVoice, setAiVoice] = useState<"male" | "female">("female");
   const [fontSize, setFontSize] = useState<"small" | "medium" | "large">("medium");
 
+  const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem("gemini_api_key") || "");
+
+  useEffect(() => {
+    localStorage.setItem("gemini_api_key", geminiKey);
+  }, [geminiKey]);
+
   // Sync dark mode
   useEffect(() => {
     if (theme === "dark") {
@@ -33,43 +39,8 @@ export default function App() {
 
   // Load books overview on mount
   useEffect(() => {
-    fetch("/api/books")
-      .then((res) => {
-        if (!res.ok) throw new Error("無法連線至 API 系統");
-        return res.json();
-      })
-      .then((data) => {
-        setBooks(data);
-        setLoadingList(false);
-      })
-      .catch((err) => {
-        console.error("Fetch overview failed, using mock data:", err);
-        // Fallback list inside client to ensure offline or bootstrap reliability
-        const fallback = [
-          {
-            id: "2026-05-21",
-            date: "2026-05-21",
-            title: "激發員工潛力的薩提爾教練模式",
-            author: "陳茂雄 (依薩提爾導師模式延伸)",
-            category: "領導與管理",
-            coverGradient: "from-emerald-500 to-teal-700",
-            description: "本書將美國家族治療大師維琴尼亞·薩提爾的「冰山理論」融入企業管理，教導領導者如何穿透部屬的表面行為，觸及下層的感受、觀點、期待及渴望，引導員工從內在激發源源不絕的潛力。",
-            coreTakeaway: "優異的管理不只是解決眼前的「事情」，更是陪伴、引導並激發員工「人」的潛能。透過冰山對話，讓管理者從「救火員」轉化為部屬生命中的「心靈教練」。"
-          },
-          {
-            id: "2026-05-22",
-            date: "2026-05-22",
-            title: "會說故事的巧實力！",
-            author: "安奈特·西融斯 (Annette Simmons / 美國故事學專家)",
-            category: "溝通與表達",
-            coverGradient: "from-amber-500 to-orange-700",
-            description: "在這個資訊超載的時代，冰冷數據和邏輯報告早已失效。本書深入淺出地解構如何運用故事作為『巧實力』，將生硬的事實與理念包裹在充滿畫面感的情感中，激發共鳴，創造無法抗拒的說服力。",
-            coreTakeaway: "人們不會因為被告知了事實而改變想法，他們會因為被故事感動而改變觀點。說故事是每位領導者、行銷人與溝通者不可或缺的頂級影響力工具。"
-          }
-        ];
-        setBooks(fallback);
-        setLoadingList(false);
-      });
+    setBooks(booksData);
+    setLoadingList(false);
   }, []);
 
   // Handle entering a specific day / book detail page
@@ -78,19 +49,13 @@ export default function App() {
     setActiveMode(initialMode);
     setLoadingDetail(true);
 
-    fetch(`/api/books/${id}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("找不到對應書籍詳細內容");
-        return res.json();
-      })
-      .then((data) => {
-        setBookDetail(data);
-        setLoadingDetail(false);
-      })
-      .catch((err) => {
-        console.error("Fetch book details failed:", err);
-        setLoadingDetail(false);
-      });
+    const foundBook = booksData.find((b) => b.id === id);
+    if (foundBook) {
+      setBookDetail(foundBook);
+    } else {
+      console.error(`Fetch book details failed: Book with id ${id} not found in static data`);
+    }
+    setLoadingDetail(false);
   };
 
   // Back to overview board
