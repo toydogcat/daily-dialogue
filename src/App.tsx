@@ -192,6 +192,17 @@ export default function App() {
                   <option value="large">大 (Large)</option>
                 </select>
               </div>
+              <div className="pt-4 border-t border-natural-border mt-4">
+                <label className="block text-sm font-medium text-natural-dark mb-2">Gemini API Key</label>
+                <input 
+                  type="password" 
+                  value={geminiKey} 
+                  onChange={e => setGeminiKey(e.target.value)} 
+                  placeholder="AI 對話必須填寫 (儲存於本地)"
+                  className="w-full bg-natural-warm border border-natural-border rounded-lg px-3 py-2 text-sm text-natural-dark outline-none focus:ring-1 focus:ring-[#6B705C] placeholder:text-natural-sand"
+                />
+                <p className="text-[10px] text-natural-sand mt-1">金鑰僅會儲存在您的瀏覽器中，不會上傳到任何伺服器。</p>
+              </div>
             </div>
           </div>
         </div>
@@ -209,7 +220,7 @@ export default function App() {
             {/* Visual Intro Banner */}
             <div className="bg-natural-cream rounded-3xl border border-natural-border p-8 md:p-10 shadow-2xs relative overflow-hidden flex flex-col md:flex-row justify-between items-center gap-8">
               <div className="space-y-4 max-w-2xl relative z-10">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-natural-border text-natural-sage text-xs font-semibold font-mono tracking-wider">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-natural-bg border border-natural-border text-natural-sage text-xs font-semibold font-mono tracking-wider">
                   <Sparkles className="w-3.5 h-3.5" />
                   高效學習 • 雙軌解密
                 </div>
@@ -233,7 +244,7 @@ export default function App() {
             </div>
 
             {/* Tool search & Filter bar */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-white p-4 rounded-2xl border border-natural-border shadow-3xs">
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-natural-bg p-4 rounded-2xl border border-natural-border shadow-3xs">
               <div className="relative w-full sm:max-w-md">
                 <Search className="w-4 h-4 text-natural-sand absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -241,7 +252,7 @@ export default function App() {
                   placeholder="搜尋書名、作者、章節觀點或日期..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-[#FBF9F5] border border-natural-border hover:border-natural-sand-light focus:bg-white focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
+                  className="w-full bg-[#FBF9F5] border border-natural-border hover:border-natural-sand-light focus:bg-natural-bg focus:border-[#6B705C] focus:ring-[#6B705C] rounded-xl pl-10 pr-4 py-2.5 text-xs md:text-sm outline-none transition-all placeholder:text-natural-sand text-natural-dark"
                 />
               </div>
 
@@ -255,7 +266,7 @@ export default function App() {
             {loadingList ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-12">
                 {[1, 2].map((n) => (
-                  <div key={n} className="bg-white rounded-2xl border border-natural-border p-8 space-y-4 animate-pulse h-80">
+                  <div key={n} className="bg-natural-bg rounded-2xl border border-natural-border p-8 space-y-4 animate-pulse h-80">
                     <div className="h-6 w-1/3 bg-[#F5F2ED] rounded" />
                     <div className="h-10 w-2/3 bg-[#F5F2ED] rounded" />
                     <div className="h-20 bg-[#F9F7F2]/60 rounded" />
@@ -273,7 +284,7 @@ export default function App() {
                 ))}
               </div>
             ) : (
-              <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-natural-border space-y-4">
+              <div className="text-center py-20 bg-natural-bg rounded-3xl border border-dashed border-natural-border space-y-4">
                 <p className="text-natural-sand text-sm font-serif">找不到符合搜尋條件的每日書目...</p>
                 <button
                   onClick={() => setSearchQuery("")}
@@ -293,7 +304,7 @@ export default function App() {
           <div className="space-y-6" id="daily-view">
             
             {/* Context Back and Swapping Controls Header */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-white p-4.5 rounded-2xl border border-natural-border shadow-3xs">
+            <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center bg-natural-bg p-4.5 rounded-2xl border border-natural-border shadow-3xs">
               
               {/* Back Command */}
               <button
@@ -347,7 +358,7 @@ export default function App() {
 
             {/* Active Mode Render container */}
             {loadingDetail ? (
-              <div className="bg-white rounded-3xl border border-natural-border p-16 flex flex-col justify-center items-center gap-4 animate-pulse">
+              <div className="bg-natural-bg rounded-3xl border border-natural-border p-16 flex flex-col justify-center items-center gap-4 animate-pulse">
                 <div className="w-10 h-10 border-4 border-[#6B705C] border-t-transparent rounded-full animate-spin" />
                 <p className="text-xs font-serif text-natural-sand">正在精心解密當天書籍架構與教練配置...</p>
               </div>
@@ -359,6 +370,7 @@ export default function App() {
                     language={language}
                     aiVoice={aiVoice}
                     fontSize={fontSize}
+                    geminiKey={geminiKey}
                   />
                 ) : (
                   <BlogView book={bookDetail} />

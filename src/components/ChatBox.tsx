@@ -13,9 +13,10 @@ interface ChatBoxProps {
   language: "zh-TW" | "en-US";
   aiVoice: "male" | "female";
   fontSize: "small" | "medium" | "large";
+  geminiKey: string;
 }
 
-export default function ChatBox({ book, language, aiVoice, fontSize }: ChatBoxProps) {
+export default function ChatBox({ book, language, aiVoice, fontSize, geminiKey }: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -106,42 +107,86 @@ export default function ChatBox({ book, language, aiVoice, fontSize }: ChatBoxPr
     setErrorMsg(null);
 
     try {
-      const history = [...messages, newUserMsg].map(m => ({
-        role: m.role,
-        content: m.content
+      if (!geminiKey) {
+        throw new Error(language === "en-US" ? "Please enter your Gemini API Key in Settings first." : "請先在設定中輸入您的 Gemini API Key！");
+      }
+
+      const targetLanguage = language === 'en-US' ? 'English' : '繁體中文 (Traditional Chinese / 台灣地區用語習慣)';
+      const chaptersStr = book.chapters.map((ch, idx) => `  ${idx + 1}. ${ch.title}: ${ch.summary}`).join("\n");
+      const conceptsStr = book.concepts.map((con, idx) => `  要點 ${idx + 1}：【${con.title}】\n  摘要：${con.description}\n  詳情說明：${con.extendedContent}`).join("\n\n");
+
+      const systemInstruction = `你是一位專業、博學且極具同理心的「每日導讀教練（Daily Book Coach）」。
+你精通這本書：《${book.title}》
+作者：${book.author}
+分類：${book.category}
+
+這裡這本書的核心精華、章節大綱與重要觀點，這也是你唯一的對話依據：
+
+【核心精華與主旨】
+${book.coreTakeaway}
+
+【代表金句】
+${book.quote}
+
+【章節大綱】
+${chaptersStr}
+
+【核心要點與深刻說明】
+${conceptsStr}
+
+【適合讀者群】
+${book.targetAudience.join(", ")}
+
+【導讀建議與練習】
+${book.readingGuide}
+
+---
+你的對話指令與準則：
+1. 請一律使用「${targetLanguage}」回覆使用者關於這本書的一切疑問。
+2. 你的目標是：以輕鬆、啟發人心的聊天對話方式，引導、陪伴使用者理解這本書的核心概念「並且知道如何運用於日常生活中」。
+3. 態度保持親近、溫暖、專業、邏輯清晰。你可以多用分段或有條理的條列式來回應。
+4. 如果使用者提出完全「與本書內容不相干」或「完全離題」的事情，請用委婉幽默的方式把話題引導拉回這本書（例如：『這很有意思，但如果我們回到《${book.title}》這本書，書中提到的...』）。
+5. 在對話一開始，你可以主動對部屬／故事的痛點提出反問，激發他們的學習慾。
+6. 請適當在回答中提及：書中某章節、哪一個具體概念（例如：薩提爾的冰山理論、或是起承轉合故事架構），讓使用者感受到你是這本書的權威教練。`;
+
+      const contents = [...messages, newUserMsg].map(m => ({
+        role: m.role === "assistant" ? "model" : "user",
+        parts: [{ text: m.content }]
       }));
 
-      const response = await fetch("/api/chat", {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          bookId: book.id,
-          messages: history,
-          language: language
+          system_instruction: { parts: [{ text: systemInstruction }] },
+          contents: contents,
+          generationConfig: { temperature: 0.7 }
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || "伺服器返回錯誤，對話無法正常運行");
+        throw new Error(data.error?.message || "API 請求失敗，請確認您的 API Key 是否正確或有額度。");
       }
+
+      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "抱歉，我無法做出回應。";
 
       setMessages(prev => [
         ...prev,
         {
           id: `ai-msg-${Date.now()}`,
           role: "assistant",
-          content: data.reply
+          content: replyText
         }
       ]);
       
       // Auto-speak the response
-      speakText(data.reply);
+      speakText(replyText);
 
     } catch (err: any) {
       console.error("Chat action failed:", err);
-      setErrorMsg(err.message || "網路連線異常，或 API 設定尚未完成。");
+      setErrorMsg(err.message || "發生錯誤，請確認設定中的 API Key 是否正確。");
     } finally {
       setIsLoading(false);
     }
