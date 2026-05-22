@@ -1,20 +1,17 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-TW">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
-    <!-- Anti-Rogue Service Worker Script -->
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for (let registration of registrations) {
-            registration.unregister();
-            console.log('Unregistered rogue service worker:', registration);
-          }
-        });
-      }
-    </script>
+    <title>每天對話一本書 | 智慧伴讀 AI 教練</title>
+    
+    <!-- iOS PWA Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/daily-dialogue/apple-touch-icon.png">
+    
+    <!-- Theme Color matches manifest -->
+    <meta name="theme-color" content="#6B705C">
   </head>
   <body>
     <div id="root"></div>
