@@ -153,6 +153,35 @@ export default function BlogView({ book }: BlogViewProps) {
 
       </div>
 
+      {/* 7 Key Excerpts - Showcase writing style */}
+      <section className="space-y-6">
+        <div className="flex items-center gap-2.5">
+          <div className="w-1.5 h-6 bg-rose-400 rounded-full" />
+          <h4 className="text-lg font-serif font-bold text-natural-dark">7 大精華節錄：感受這本書的筆觸與溫度</h4>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {book.excerpts?.map((excerpt, idx) => (
+            <div 
+              key={idx} 
+              className={`p-5 rounded-2xl border border-natural-border bg-natural-bg/50 relative overflow-hidden group hover:border-natural-sand transition-all ${
+                idx === 6 ? "md:col-span-2" : ""
+              }`}
+            >
+              <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+                <Quote className="w-16 h-16" />
+              </div>
+              <p className="text-sm text-natural-dark/90 leading-relaxed font-serif italic relative z-10">
+                「{excerpt}」
+              </p>
+              <div className="mt-3 flex justify-end">
+                <span className="text-[10px] font-mono text-natural-sand uppercase tracking-tighter">EXCERPT {idx + 1}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Target Audience & Guide Block */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         
