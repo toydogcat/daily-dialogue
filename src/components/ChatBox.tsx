@@ -102,7 +102,7 @@ export default function ChatBox({
       } else if (book.id === "2026-05-21") {
         welcomeText = `您好！我是您的專屬《激發員工潛力的薩提爾教練模式》讀書伴侶 📚。今天想探討什麼呢？`;
       } else {
-        welcomeText = `歡迎到來！我是您的專屬《會說故事的巧實力！》導學教練 🌟。讓我們開始吧！`;
+        welcomeText = `歡迎到來！我是您的專屬《${book.title}》導學教練 🌟。讓我們開始吧！`;
       }
     }
 

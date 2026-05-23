@@ -3,7 +3,7 @@ import BookCard from "./components/BookCard";
 import ChatBox from "./components/ChatBox";
 import BlogView from "./components/BlogView";
 import GuideChatBox from "./components/GuideChatBox";
-import { Book, booksData } from "./booksData";
+import { Book, BookMetadata, booksData, loadBookDetail } from "./booksData";
 import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, ChevronRight, Settings, X } from "lucide-react";
 import { useWebLLM } from "./hooks/useWebLLM";
 
@@ -26,10 +26,16 @@ export default function App() {
     return localStorage.getItem("daily_dialogue_show_future_books") === "true";
   });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(12);
 
   useEffect(() => {
     localStorage.setItem("daily_dialogue_show_future_books", String(showFutureBooks));
   }, [showFutureBooks]);
+
+  // Reset pagination when filter/search changes
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [searchQuery, selectedTag, showFutureBooks]);
 
   const [geminiKey, setGeminiKey] = useState<string>(() => localStorage.getItem("gemini_api_key") || "");
 
@@ -137,18 +143,19 @@ export default function App() {
   }, [processedBooks, selectedTag, searchQuery]);
 
   // Handle entering a specific day / book detail page
-  const handleSelectBook = (id: string, initialMode: "chat" | "blog" = "chat") => {
+  const handleSelectBook = async (id: string, initialMode: "chat" | "blog" = "chat") => {
     setSelectedBookId(id);
     setActiveMode(initialMode);
     setLoadingDetail(true);
 
-    const foundBook = booksData.find((b) => b.id === id);
-    if (foundBook) {
-      setBookDetail(foundBook);
-    } else {
-      console.error(`Fetch book details failed: Book with id ${id} not found in static data`);
+    try {
+      const detailedBook = await loadBookDetail(id);
+      setBookDetail(detailedBook);
+    } catch (err) {
+      console.error(`Fetch book details failed:`, err);
+    } finally {
+      setLoadingDetail(false);
     }
-    setLoadingDetail(false);
   };
 
   // Back to overview board
@@ -422,14 +429,31 @@ export default function App() {
                     ))}
                   </div>
                 ) : filteredBooks.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {filteredBooks.map((book) => (
-                      <BookCard
-                        key={book.id}
-                        book={book}
-                        onSelect={handleSelectBook}
-                      />
-                    ))}
+                  <div className="space-y-10">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {filteredBooks.slice(0, visibleCount).map((book) => (
+                        <BookCard
+                          key={book.id}
+                          book={book}
+                          onSelect={handleSelectBook}
+                        />
+                      ))}
+                    </div>
+                    
+                    {filteredBooks.length > visibleCount && (
+                      <div className="flex justify-center pt-4">
+                        <button
+                          id="btn-load-more"
+                          onClick={() => setVisibleCount((prev) => prev + 12)}
+                          className="px-6 py-3 bg-natural-warm hover:bg-[#EAE6DF] text-natural-dark font-serif font-bold text-xs rounded-xl border border-natural-border hover:border-natural-sand-light shadow-3xs transition-all duration-300 hover:scale-[1.02] cursor-pointer flex items-center gap-2"
+                        >
+                          載入更多每日好書
+                          <span className="bg-[#6B705C] text-[#FDFCF8] text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
+                            {filteredBooks.length - visibleCount}
+                          </span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-20 bg-natural-bg rounded-3xl border border-dashed border-natural-border space-y-4">

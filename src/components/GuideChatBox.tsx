@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Book } from "../booksData";
+import { BookMetadata } from "../booksData";
 import { Send, Sparkles, RefreshCw, AlertCircle, HelpCircle, ArrowRight, Mic, Volume2 } from "lucide-react";
 import { useWebLLM } from "../hooks/useWebLLM";
 
@@ -10,7 +10,7 @@ interface Message {
 }
 
 interface GuideChatBoxProps {
-  books: Book[];
+  books: BookMetadata[];
   language: "zh-TW" | "en-US";
   aiVoice: "male" | "female";
   fontSize: "small" | "medium" | "large";

@@ -1,15 +1,4 @@
-import { books202604Week1 } from './data/books/2026-04-week1';
-import { books202604Week2 } from './data/books/2026-04-week2';
-import { books202604Week3 } from './data/books/2026-04-week3';
-import { books202604Week4 } from './data/books/2026-04-week4';
-import { books202605Week1 } from './data/books/2026-05-week1';
-import { books202605Week2 } from './data/books/2026-05-week2';
-import { books202605Week3 } from './data/books/2026-05-week3';
-import { books202605Week4 } from './data/books/2026-05-week4';
-import { books202606Week1 } from './data/books/2026-06-week1';
-import { books202606Week2 } from './data/books/2026-06-week2';
-import { books202606Week3 } from './data/books/2026-06-week3';
-import { books202606Week4 } from './data/books/2026-06-week4';
+import { booksMetadata } from './data/booksMetadata';
 
 export interface Chapter {
   title: string;
@@ -22,7 +11,7 @@ export interface Concept {
   extendedContent: string;
 }
 
-export interface Book {
+export interface BookMetadata {
   id: string;
   date: string; // YYYY-MM-DD format
   title: string;
@@ -31,26 +20,49 @@ export interface Book {
   coverGradient: string; // CSS gradient description for display
   description: string;
   coreTakeaway: string;
+  tags: string[];
+  targetAudience: string[];
+}
+
+export interface Book extends BookMetadata {
   chapters: Chapter[];
   concepts: Concept[];
-  targetAudience: string[];
   readingGuide: string;
   quote: string;
   excerpts: string[]; // 7 key excerpts to show style
-  tags: string[];
 }
 
-export const booksData: Book[] = [
-  ...books202604Week1,
-  ...books202604Week2,
-  ...books202604Week3,
-  ...books202604Week4,
-  ...books202605Week1,
-  ...books202605Week2,
-  ...books202605Week3,
-  ...books202605Week4,
-  ...books202606Week1,
-  ...books202606Week2,
-  ...books202606Week3,
-  ...books202606Week4
-];
+// booksData is now a lightweight array containing only book metadata
+export const booksData: BookMetadata[] = booksMetadata;
+
+// Helper function to dynamically load the full book detail
+export async function loadBookDetail(id: string): Promise<Book> {
+  const parts = id.split('-');
+  const year = parts[0];
+  const month = parts[1];
+  const day = parseInt(parts[2], 10);
+  
+  let week = 'week4';
+  if (day >= 1 && day <= 7) week = 'week1';
+  else if (day >= 8 && day <= 14) week = 'week2';
+  else if (day >= 15 && day <= 21) week = 'week3';
+
+  // Dynamic import with template literal lets Vite code-split these files
+  const module = await import(`./data/books/${year}-${month}-${week}.ts`);
+  
+  // Format standard week export name (e.g. books202601Week1)
+  const capitalizedWeek = week.charAt(0).toUpperCase() + week.slice(1);
+  const arrayName = `books${year}${month}${capitalizedWeek}`;
+  
+  const booksList = module[arrayName] as Book[];
+  if (!booksList) {
+    throw new Error(`Failed to locate array ${arrayName} in chunk ${year}-${month}-${week}`);
+  }
+
+  const foundBook = booksList.find(b => b.id === id);
+  if (!foundBook) {
+    throw new Error(`Book with id ${id} not found in dynamic chunk ${year}-${month}-${week}`);
+  }
+
+  return foundBook;
+}
