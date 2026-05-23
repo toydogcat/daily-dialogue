@@ -8,3 +8,12 @@ coverage/
 !.env.example
 
 TMP/
+
+# Local Python helper scripts & virtual environments
+*.py
+*.pyc
+__pycache__/
+.venv/
+venv/
+env/
+
