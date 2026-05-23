@@ -33,6 +33,13 @@ export default function BlogView({ book }: BlogViewProps) {
     currentIdxRef.current = currentSpeechIdx;
   }, [currentSpeechIdx]);
 
+  // Load voices on mount for SpeechSynthesis
+  useEffect(() => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+    }
+  }, []);
+
   // Construct Speech Nodes for the current Book
   useEffect(() => {
     const nodes: SpeechNode[] = [];
@@ -186,6 +193,90 @@ export default function BlogView({ book }: BlogViewProps) {
     playNextPart();
   };
 
+  const playWithNativeTTS = (text: string, index: number) => {
+    isNativeTTSRef.current = true;
+
+    // Clean text: remove emojis, convert parentheses to commas for natural pauses
+    const cleanText = text
+      .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
+      .replace(/[\(\)（）【】]/g, "，");
+
+    // Detect language: check if text has Chinese characters
+    const isChinese = /[\u4e00-\u9fa5]/.test(cleanText);
+    const lang = isChinese ? "zh-TW" : "en-US";
+
+    // Split text into readable chunks under 100 chars to avoid Chrome's 15s freeze bug
+    const parts = cleanText.split(/([，。？！；：,.\?!;:])/).reduce((acc: string[], cur: string) => {
+      if (acc.length === 0) {
+        acc.push(cur);
+      } else {
+        const lastIdx = acc.length - 1;
+        if (acc[lastIdx].length + cur.length < 100) {
+          acc[lastIdx] += cur;
+        } else {
+          acc.push(cur);
+        }
+      }
+      return acc;
+    }, []).filter(s => s.trim().length > 0);
+
+    let partIdx = 0;
+    
+    const playNextPart = () => {
+      if (currentIdxRef.current !== index) return;
+
+      if (partIdx >= parts.length) {
+        // Finished current speech node, move to next
+        const nextIdx = index + 1;
+        if (nextIdx < speechNodes.length) {
+          playNode(nextIdx);
+        } else {
+          stopSpeech();
+        }
+        return;
+      }
+
+      const sentence = parts[partIdx];
+      const utterance = new SpeechSynthesisUtterance(sentence);
+      utterance.lang = lang;
+
+      // Voice selection logic based on language
+      const voices = window.speechSynthesis.getVoices();
+      const langVoices = voices.filter(v => v.lang.includes(lang.split('-')[0]));
+      
+      if (langVoices.length > 0) {
+        // Look for standard high quality voices or default local voices
+        let selectedVoice = langVoices.find(v => v.name.includes("Google") || v.name.includes("Microsoft") || v.localService);
+        if (!selectedVoice) {
+          selectedVoice = langVoices[0];
+        }
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.onend = () => {
+        partIdx++;
+        playNextPart();
+      };
+
+      utterance.onerror = (e) => {
+        if (e.error === 'interrupted' || e.error === 'canceled') {
+          console.log("Native TTS playback cancelled or interrupted.");
+          return;
+        }
+        console.warn("Native TTS part failed, falling back to next part...", e);
+        partIdx++;
+        playNextPart();
+      };
+
+      setIsSpeechLoading(false);
+      setIsSpeechPlaying(true);
+      window.speechSynthesis.speak(utterance);
+    };
+
+    setIsSpeechLoading(true);
+    playNextPart();
+  };
+
   const playNode = async (index: number) => {
     if (index < 0 || index >= speechNodes.length) {
       stopSpeech();
@@ -224,8 +315,12 @@ export default function BlogView({ book }: BlogViewProps) {
         }
       }
 
-      // Play with the high-fidelity Google TTS Engine (100% OS-independent!)
-      playWithGoogleTTS(node.text, index);
+      // Play with the high-fidelity native Web Speech API if supported, otherwise Google TTS fallback
+      if (window.speechSynthesis) {
+        playWithNativeTTS(node.text, index);
+      } else {
+        playWithGoogleTTS(node.text, index);
+      }
     } catch (err) {
       console.error("Speech playback error:", err);
       stopSpeech();
@@ -236,12 +331,20 @@ export default function BlogView({ book }: BlogViewProps) {
     if (currentSpeechIdx === null) {
       playNode(0);
     } else if (isSpeechPlaying) {
-      if (audioRef.current) {
+      if (isNativeTTSRef.current) {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.pause();
+        }
+      } else if (audioRef.current) {
         audioRef.current.pause();
       }
       setIsSpeechPlaying(false);
     } else {
-      if (audioRef.current) {
+      if (isNativeTTSRef.current) {
+        if (window.speechSynthesis) {
+          window.speechSynthesis.resume();
+        }
+      } else if (audioRef.current) {
         audioRef.current.play().catch(e => console.error("Resume failed:", e));
       }
       setIsSpeechPlaying(true);
