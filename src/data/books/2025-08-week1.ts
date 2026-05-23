@@ -1,6 +1,6 @@
 import { Book } from "../../booksData";
 
-export const books202508week1: Book[] = [
+export const books202508Week1: Book[] = [
   {
     "id": "2025-08-01",
     "date": "2025-08-01",
@@ -202,7 +202,7 @@ export const books202508week1: Book[] = [
     ],
     "concepts": [
       { "title": "超越第一階段 (Beyond Stage One)", "description": "一種要求決策者與觀察者分析政策之連鎖後續反應的思考習慣。", "extendedContent": "索維爾強調，人的行為是跟著成本走的。當政策改變了成本結構，就會引發一系列未預期的行為變化，這才是政策的真實全貌。" },
-      { "title": "政治正確的經濟代價", "description": "探討為了符合道德直覺而推行的政策，如何在底層運作中造成結構性的效率損失與不公正。" , "extendedContent": "" }
+      { "title": "政治正確的經濟代價", "description": "探討為了符合道德直覺而推行的政策，如何在底層運作中造成結構性的效率損失與不公正。" , "extendedContent": "索維爾指出，當出於高尚目的但違背基本經濟學規律的政策被強制推行時，系統會尋找其他途徑平衡成本，例如以非價格特徵（排隊時間、關係、暗地裡的交易）進行篩選，反而增加了真實成本並傷害了弱勢群體。" }
     ],
     "targetAudience": ["公共政策研究者", "經濟學愛好者", "希望提升深度思考力者"],
     "tags": ["托馬斯索維爾", "應用經濟學", "批判性思維", "連鎖後果", "價格管制"],

@@ -4,7 +4,7 @@ import ChatBox from "./components/ChatBox";
 import BlogView from "./components/BlogView";
 import GuideChatBox from "./components/GuideChatBox";
 import { Book, BookMetadata, booksData, loadBookDetail } from "./booksData";
-import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, ChevronRight, Settings, X } from "lucide-react";
+import { BookOpen, Sparkles, MessageSquare, ListFilter, ArrowLeft, Search, ChevronRight, Settings, X, Eye, Users } from "lucide-react";
 import { useWebLLM } from "./hooks/useWebLLM";
 
 export default function App() {
@@ -27,6 +27,58 @@ export default function App() {
   });
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [visibleCount, setVisibleCount] = useState(12);
+  const [visitorStats, setVisitorStats] = useState<{ sitePv: number; siteUv: number } | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const host = window.location.host || "unknown-host";
+        const cookieName = `vercount_uv_${host.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+        
+        const hasCookie = document.cookie.split("; ").some(item => item.startsWith(`${cookieName}=`));
+        const isNewUv = !hasCookie;
+        
+        if (isNewUv) {
+          document.cookie = `${cookieName}=1; path=/; max-age=31536000; samesite=lax`;
+        }
+
+        const response = await fetch("https://events.vercount.one/api/v2/log", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            url: window.location.href,
+            isNewUv: isNewUv
+          })
+        });
+
+        if (response.ok) {
+          const resData = await response.json();
+          if (resData.status === "success" && resData.data) {
+            setVisitorStats({
+              sitePv: resData.data.site_pv || 0,
+              siteUv: resData.data.site_uv || 0
+            });
+            localStorage.setItem("daily_dialogue_visitor_stats", JSON.stringify({
+              sitePv: resData.data.site_pv || 0,
+              siteUv: resData.data.site_uv || 0
+            }));
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch visitor stats:", err);
+        const saved = localStorage.getItem("daily_dialogue_visitor_stats");
+        if (saved) {
+          try {
+            setVisitorStats(JSON.parse(saved));
+          } catch (_) {}
+        }
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("daily_dialogue_show_future_books", String(showFutureBooks));
@@ -589,7 +641,21 @@ export default function App() {
       <footer className="bg-natural-bg/50 border-t border-natural-border py-6 px-4 shrink-0 text-center text-xs text-natural-sand font-serif">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
           <p>© 2026 每天對話一本書 • AI Studio Live Workshop</p>
-          <div className="flex gap-4">
+          <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1">
+            {visitorStats && (
+              <>
+                <span className="flex items-center gap-1 cursor-default hover:text-[#6B705C] transition-colors">
+                  <Eye className="w-3 h-3 text-[#6B705C]/75" />
+                  總瀏覽 <span className="font-sans font-bold text-natural-sand/90">{visitorStats.sitePv}</span> 次
+                </span>
+                <span className="text-natural-border/60">•</span>
+                <span className="flex items-center gap-1 cursor-default hover:text-[#6B705C] transition-colors">
+                  <Users className="w-3 h-3 text-[#6B705C]/75" />
+                  訪客 <span className="font-sans font-bold text-natural-sand/90">{visitorStats.siteUv}</span> 人
+                </span>
+                <span className="text-natural-border/60">•</span>
+              </>
+            )}
             <span className="cursor-default hover:text-[#6B705C] transition-colors">繁體中文版</span>
             <span>•</span>
             <span className="cursor-default hover:text-[#6B705C] transition-colors">極速對答機制</span>

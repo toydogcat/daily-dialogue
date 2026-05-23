@@ -1,6 +1,6 @@
 import { Book } from "../../booksData";
 
-export const books202508week3: Book[] = [
+export const books202508Week3: Book[] = [
   {
     "id": "2025-08-15",
     "date": "2025-08-15",
