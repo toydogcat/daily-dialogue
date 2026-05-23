@@ -116,92 +116,74 @@ export default function BlogView({ book }: BlogViewProps) {
     };
   }, [book]);
 
-  const speakWithNative = (text: string, index: number) => {
-    if (!window.speechSynthesis) {
-      console.warn("SpeechSynthesis not supported on this browser.");
-      setIsSpeechLoading(false);
-      
-      const timeout = setTimeout(() => {
-        if (currentIdxRef.current === index) {
-          const nextIdx = index + 1;
-          if (nextIdx < speechNodes.length) {
-            playNode(nextIdx);
-          } else {
-            stopSpeech();
-          }
-        }
-      }, 3000);
-      
-      audioRef.current = {
-        pause: () => clearTimeout(timeout),
-        src: "",
-        play: () => {}
-      } as any;
-      return;
-    }
+  const playWithGoogleTTS = (text: string, index: number) => {
+    isNativeTTSRef.current = false;
 
-    isNativeTTSRef.current = true;
-    setIsSpeechLoading(false);
-    setIsSpeechPlaying(true);
+    // Clean text: remove emojis, convert parentheses to commas for natural pauses
+    const cleanText = text
+      .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
+      .replace(/[\(\)（）【】]/g, "，");
 
-    // Cancel existing speaker
-    window.speechSynthesis.cancel();
-
-    // Chrome synthesis-failed bugfix: wait for next event loop tick to let the browser clear the audio channel
-    setTimeout(() => {
-      // Re-verify that user didn't change segments or pause during the 60ms delay
-      if (currentIdxRef.current !== index) return;
-
-      // Clean emojis and replace parentheses with commas to read smoothly
-      const cleanText = text
-        .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
-        .replace(/[\(\)（）【】]/g, "，");
-      
-      const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.lang = "zh-TW";
-      utterance.rate = 1.0;
-
-      // Let browser choose default voice safely based on lang tag
-      const voices = window.speechSynthesis.getVoices();
-      if (voices && voices.length > 0) {
-        const preferredVoice = voices.find(v => 
-          v.lang === "zh-TW" || 
-          v.lang.toLowerCase().replace("_", "-") === "zh-tw" || 
-          v.lang.includes("TW") ||
-          v.lang.includes("zh-HK") ||
-          v.lang.includes("zh-CN")
-        );
-        if (preferredVoice) {
-          utterance.voice = preferredVoice;
+    // Split text into readable chunks under 150 chars (Google Translate URL limit is 200)
+    // We split by punctuation to maintain natural phrase boundaries
+    const parts = cleanText.split(/([，。？！；])/).reduce((acc: string[], cur: string) => {
+      if (acc.length === 0) {
+        acc.push(cur);
+      } else {
+        const lastIdx = acc.length - 1;
+        if (acc[lastIdx].length + cur.length < 150) {
+          acc[lastIdx] += cur;
+        } else {
+          acc.push(cur);
         }
       }
+      return acc;
+    }, []).filter(s => s.trim().length > 0);
 
-      utterance.onend = () => {
-        if (currentIdxRef.current === index) {
-          const nextIdx = index + 1;
-          if (nextIdx < speechNodes.length) {
-            playNode(nextIdx);
-          } else {
-            stopSpeech();
-          }
+    let partIdx = 0;
+    
+    const playNextPart = () => {
+      if (currentIdxRef.current !== index) return;
+
+      if (partIdx >= parts.length) {
+        // Finished current speech node, move to next
+        const nextIdx = index + 1;
+        if (nextIdx < speechNodes.length) {
+          playNode(nextIdx);
+        } else {
+          stopSpeech();
         }
+        return;
+      }
+
+      const sentence = parts[partIdx];
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=zh-TW&client=tw-ob&q=${encodeURIComponent(sentence)}`;
+      
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      setIsSpeechLoading(false);
+      setIsSpeechPlaying(true);
+
+      audio.onended = () => {
+        partIdx++;
+        playNextPart();
       };
 
-      utterance.onerror = (e) => {
-        console.error("Native utterance error:", e);
-        // Chrome fires "interrupted" when we skip or cancel. Only proceed on actual failures.
-        if (e.error !== "interrupted" && currentIdxRef.current === index) {
-          const nextIdx = index + 1;
-          if (nextIdx < speechNodes.length) {
-            playNode(nextIdx);
-          } else {
-            stopSpeech();
-          }
-        }
+      audio.onerror = (e) => {
+        console.warn("Google TTS part failed, falling back to next part...", e);
+        partIdx++;
+        playNextPart();
       };
 
-      window.speechSynthesis.speak(utterance);
-    }, 60);
+      audio.play().catch(err => {
+        console.error("Audio playback blocked or failed:", err);
+        setIsSpeechLoading(false);
+        setIsSpeechPlaying(false);
+      });
+    };
+
+    setIsSpeechLoading(true);
+    playNextPart();
   };
 
   const playNode = async (index: number) => {
@@ -219,7 +201,7 @@ export default function BlogView({ book }: BlogViewProps) {
       if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
-      isNativeTTSRef.current = true;
+      isNativeTTSRef.current = false;
 
       if (audioRef.current) {
         audioRef.current.pause();
@@ -242,12 +224,11 @@ export default function BlogView({ book }: BlogViewProps) {
         }
       }
 
-      // Direct speech synthesis path for 100% reliable local Taiwan Chinese voices
-      speakWithNative(node.text, index);
+      // Play with the high-fidelity Google TTS Engine (100% OS-independent!)
+      playWithGoogleTTS(node.text, index);
     } catch (err) {
       console.error("Speech playback error:", err);
-      const node = speechNodes[index];
-      speakWithNative(node.text, index);
+      stopSpeech();
     }
   };
 
@@ -255,28 +236,22 @@ export default function BlogView({ book }: BlogViewProps) {
     if (currentSpeechIdx === null) {
       playNode(0);
     } else if (isSpeechPlaying) {
-      if (isNativeTTSRef.current && window.speechSynthesis) {
-        window.speechSynthesis.pause();
-      } else if (audioRef.current) {
+      if (audioRef.current) {
         audioRef.current.pause();
       }
       setIsSpeechPlaying(false);
     } else {
-      if (isNativeTTSRef.current && window.speechSynthesis) {
-        window.speechSynthesis.resume();
-      } else if (audioRef.current) {
-        audioRef.current.play();
+      if (audioRef.current) {
+        audioRef.current.play().catch(e => console.error("Resume failed:", e));
       }
       setIsSpeechPlaying(true);
     }
   };
 
   const stopSpeech = () => {
-    if (isNativeTTSRef.current && window.speechSynthesis) {
+    if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    isNativeTTSRef.current = false;
-
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
