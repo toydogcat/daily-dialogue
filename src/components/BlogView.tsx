@@ -144,46 +144,64 @@ export default function BlogView({ book }: BlogViewProps) {
     setIsSpeechLoading(false);
     setIsSpeechPlaying(true);
 
+    // Cancel existing speaker
     window.speechSynthesis.cancel();
 
-    // Clean text of emojis to avoid native voice errors
-    const cleanText = text.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "");
-    
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = "zh-TW";
-    utterance.rate = 1.0;
+    // Chrome synthesis-failed bugfix: wait for next event loop tick to let the browser clear the audio channel
+    setTimeout(() => {
+      // Re-verify that user didn't change segments or pause during the 60ms delay
+      if (currentIdxRef.current !== index) return;
 
-    // Use default browser voice or local Chinese
-    const voices = window.speechSynthesis.getVoices();
-    const zhVoice = voices.find(v => v.lang.includes("zh-TW") || v.lang.includes("zh-HK") || v.lang.includes("zh-CN") || v.lang.includes("zh"));
-    if (zhVoice) {
-      utterance.voice = zhVoice;
-    }
+      // Clean emojis and replace parentheses with commas to read smoothly
+      const cleanText = text
+        .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
+        .replace(/[\(\)（）【】]/g, "，");
+      
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = "zh-TW";
+      utterance.rate = 1.0;
 
-    utterance.onend = () => {
-      if (currentIdxRef.current === index) {
-        const nextIdx = index + 1;
-        if (nextIdx < speechNodes.length) {
-          playNode(nextIdx);
-        } else {
-          stopSpeech();
+      // Let browser choose default voice safely based on lang tag
+      const voices = window.speechSynthesis.getVoices();
+      if (voices && voices.length > 0) {
+        const preferredVoice = voices.find(v => 
+          v.lang === "zh-TW" || 
+          v.lang.toLowerCase().replace("_", "-") === "zh-tw" || 
+          v.lang.includes("TW") ||
+          v.lang.includes("zh-HK") ||
+          v.lang.includes("zh-CN")
+        );
+        if (preferredVoice) {
+          utterance.voice = preferredVoice;
         }
       }
-    };
 
-    utterance.onerror = (e) => {
-      console.error("Native utterance error:", e);
-      if (e.error !== "interrupted" && currentIdxRef.current === index) {
-        const nextIdx = index + 1;
-        if (nextIdx < speechNodes.length) {
-          playNode(nextIdx);
-        } else {
-          stopSpeech();
+      utterance.onend = () => {
+        if (currentIdxRef.current === index) {
+          const nextIdx = index + 1;
+          if (nextIdx < speechNodes.length) {
+            playNode(nextIdx);
+          } else {
+            stopSpeech();
+          }
         }
-      }
-    };
+      };
 
-    window.speechSynthesis.speak(utterance);
+      utterance.onerror = (e) => {
+        console.error("Native utterance error:", e);
+        // Chrome fires "interrupted" when we skip or cancel. Only proceed on actual failures.
+        if (e.error !== "interrupted" && currentIdxRef.current === index) {
+          const nextIdx = index + 1;
+          if (nextIdx < speechNodes.length) {
+            playNode(nextIdx);
+          } else {
+            stopSpeech();
+          }
+        }
+      };
+
+      window.speechSynthesis.speak(utterance);
+    }, 60);
   };
 
   const playNode = async (index: number) => {
@@ -198,10 +216,10 @@ export default function BlogView({ book }: BlogViewProps) {
       setIsSpeechPlaying(true);
 
       // Stop current playback engines
-      if (isNativeTTSRef.current && window.speechSynthesis) {
+      if (window.speechSynthesis) {
         window.speechSynthesis.cancel();
       }
-      isNativeTTSRef.current = false;
+      isNativeTTSRef.current = true;
 
       if (audioRef.current) {
         audioRef.current.pause();
@@ -224,36 +242,8 @@ export default function BlogView({ book }: BlogViewProps) {
         }
       }
 
-      // Call Puter.js
-      const puter = (window as any).puter;
-      if (puter && puter.ai) {
-        try {
-          const audio = await puter.ai.txt2speech(node.text, "zh-TW");
-          
-          // Double check index didn't change while fetching
-          if (currentIdxRef.current !== index) return;
-
-          audioRef.current = audio;
-          setIsSpeechLoading(false);
-
-          audio.onended = () => {
-            const nextIdx = index + 1;
-            if (nextIdx < speechNodes.length) {
-              playNode(nextIdx);
-            } else {
-              stopSpeech();
-            }
-          };
-
-          audio.play();
-        } catch (e) {
-          console.warn("Puter TTS failed, falling back to Native SpeechSynthesis...", e);
-          speakWithNative(node.text, index);
-        }
-      } else {
-        console.warn("Puter.js not loaded, using Native SpeechSynthesis...");
-        speakWithNative(node.text, index);
-      }
+      // Direct speech synthesis path for 100% reliable local Taiwan Chinese voices
+      speakWithNative(node.text, index);
     } catch (err) {
       console.error("Speech playback error:", err);
       const node = speechNodes[index];
