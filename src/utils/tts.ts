@@ -8,6 +8,24 @@ export interface TTSProgress {
 
 type ProgressListener = (state: TTSProgress) => void;
 
+// Robust Promise wrapper with timeout functionality
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, ms);
+    promise
+      .then(res => {
+        clearTimeout(timer);
+        resolve(res);
+      })
+      .catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
+
 class KokoroTTSManager {
   private ttsInstance: KokoroTTS | null = null;
   private isInitializing = false;
@@ -34,7 +52,7 @@ class KokoroTTSManager {
     return this.currentProgress;
   }
 
-  async init(force: boolean = false) {
+  async init(force: boolean = false): Promise<KokoroTTS> {
     if (this.ttsInstance && !force) return this.ttsInstance;
     if (this.isInitializing) {
       // Return a promise that resolves when ready
@@ -52,63 +70,85 @@ class KokoroTTSManager {
     this.fileProgresses = {};
     this.notify({ status: 'loading', progress: 0, message: '正在初始化本機 AI 語音引擎...' });
 
+    const model_id = "onnx-community/Kokoro-82M-v1.1-zh-ONNX";
+    
+    // Check platform user agent
+    const isLinux = typeof navigator !== 'undefined' && /linux|android/i.test(navigator.userAgent);
+    const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator && !isLinux;
+    
+    // Default device based on OS safety guidelines
+    const preferredDevice = hasWebGPU ? 'webgpu' : 'wasm';
+
     try {
-      const model_id = "onnx-community/Kokoro-82M-v1.1-zh-ONNX";
-      const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
-      // Default to wasm, fallback if webgpu has initialization errors
-      const device = hasWebGPU ? 'webgpu' : 'wasm';
-
-      console.log(`Initializing Kokoro-82M TTS on device: ${device}`);
-
-      const tts = await KokoroTTS.from_pretrained(model_id, {
-        dtype: "q8",
-        device: device,
-        progress_callback: (info: any) => {
-          if (info.status === 'initiate') {
-            this.fileProgresses[info.file] = { loaded: 0, total: 0 };
-          } else if (info.status === 'progress') {
-            this.fileProgresses[info.file] = {
-              loaded: info.loaded || 0,
-              total: info.total || 0
-            };
-          } else if (info.status === 'done') {
-            if (this.fileProgresses[info.file]) {
-              this.fileProgresses[info.file].loaded = this.fileProgresses[info.file].total;
-            }
+      console.log(`Initializing Kokoro-82M TTS on device: ${preferredDevice}`);
+      
+      const progressCallback = (info: any) => {
+        if (info.status === 'initiate') {
+          this.fileProgresses[info.file] = { loaded: 0, total: 0 };
+        } else if (info.status === 'progress') {
+          this.fileProgresses[info.file] = {
+            loaded: info.loaded || 0,
+            total: info.total || 0
+          };
+        } else if (info.status === 'done') {
+          if (this.fileProgresses[info.file]) {
+            this.fileProgresses[info.file].loaded = this.fileProgresses[info.file].total;
           }
-
-          // Compute overall progress
-          let totalBytes = 0;
-          let loadedBytes = 0;
-          let activeFiles = 0;
-
-          Object.values(this.fileProgresses).forEach(file => {
-            if (file.total > 0) {
-              totalBytes += file.total;
-              loadedBytes += file.loaded;
-              activeFiles++;
-            }
-          });
-
-          let percent = 0;
-          let message = '正在載入離線語音模型...';
-
-          if (totalBytes > 0) {
-            percent = Math.round((loadedBytes / totalBytes) * 100);
-            const loadedMB = (loadedBytes / (1024 * 1024)).toFixed(1);
-            const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
-            message = `正在下載 AI 模型檔案: ${loadedMB}MB / ${totalMB}MB (${percent}%)`;
-          } else if (info.file) {
-            message = `正在初始化: ${info.file.substring(info.file.lastIndexOf('/') + 1)}`;
-          }
-
-          this.notify({
-            status: 'loading',
-            progress: percent,
-            message: message
-          });
         }
-      });
+
+        // Compute overall progress
+        let totalBytes = 0;
+        let loadedBytes = 0;
+        let activeFiles = 0;
+
+        Object.values(this.fileProgresses).forEach(file => {
+          if (file.total > 0) {
+            totalBytes += file.total;
+            loadedBytes += file.loaded;
+            activeFiles++;
+          }
+        });
+
+        let percent = 0;
+        let message = '正在載入離線語音模型...';
+
+        if (totalBytes > 0) {
+          percent = Math.round((loadedBytes / totalBytes) * 100);
+          const loadedMB = (loadedBytes / (1024 * 1024)).toFixed(1);
+          const totalMB = (totalBytes / (1024 * 1024)).toFixed(1);
+          message = `正在下載 AI 模型檔案: ${loadedMB}MB / ${totalMB}MB (${percent}%)`;
+        } else if (info.file) {
+          message = `正在初始化: ${info.file.substring(info.file.lastIndexOf('/') + 1)}`;
+        }
+
+        this.notify({
+          status: 'loading',
+          progress: percent,
+          message: message
+        });
+      };
+
+      let tts: KokoroTTS;
+      try {
+        tts = await KokoroTTS.from_pretrained(model_id, {
+          dtype: "q8",
+          device: preferredDevice,
+          progress_callback: progressCallback
+        });
+      } catch (gpuError: any) {
+        // If webgpu failed, fallback to WASM automatically
+        if (preferredDevice === 'webgpu') {
+          console.warn("WebGPU initialization failed, retrying with WASM/CPU:", gpuError);
+          this.notify({ status: 'loading', message: 'WebGPU 載入失敗，正在切換為 WASM 模式...' });
+          tts = await KokoroTTS.from_pretrained(model_id, {
+            dtype: "q8",
+            device: 'wasm',
+            progress_callback: progressCallback
+          });
+        } else {
+          throw gpuError;
+        }
+      }
 
       this.ttsInstance = tts;
       this.isInitializing = false;
@@ -139,7 +179,7 @@ class KokoroTTSManager {
 
   async speak(
     text: string, 
-    voice: string = 'af_sky', 
+    voice: string = 'zf_xiaobei', // Default to Chinese female voice pack
     speed: number = 1.0, 
     onStart?: () => void, 
     onEnd?: () => void, 
@@ -159,13 +199,26 @@ class KokoroTTSManager {
         .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
         .replace(/[\(\)（）【】]/g, "，");
 
-      console.log(`Generating local TTS for text: "${cleanText.substring(0, 30)}..."`);
+      // Auto-map English default voice 'af_sky' to Chinese female voice 'zf_xiaobei' 
+      // since the v1.1-zh Chinese model does not contain English voice vectors.
+      let targetVoice = voice;
+      if (targetVoice === 'af_sky' || !targetVoice) {
+        targetVoice = 'zf_xiaobei';
+      }
 
-      // 2. Generate audio
-      const rawAudio = await tts.generate(cleanText, {
-        voice: voice as any,
+      console.log(`Generating local TTS for text: "${cleanText.substring(0, 30)}..." using voice ${targetVoice}`);
+
+      // 2. Generate audio with a safety timeout (6 seconds) to prevent infinite hangs
+      const generatePromise = tts.generate(cleanText, {
+        voice: targetVoice as any,
         speed: speed
       });
+
+      const rawAudio = await withTimeout(
+        generatePromise,
+        6000,
+        "離線語音生成超時 (6秒)，自動切換至雲端語音"
+      );
 
       // 3. Play via Web Audio API
       if (!this.audioContext) {
