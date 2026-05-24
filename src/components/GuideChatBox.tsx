@@ -238,28 +238,93 @@ ${booksContextStr}
   };
 
   // --- Voice Output (Speech Synthesis) ---
-  const speakText = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    window.speechSynthesis.cancel();
-    
-    // Remove the special [BOOK:id] tag from speakable text
-    const cleanText = text.replace(/\[BOOK:(.*?)\]/g, "");
-    
-    const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.lang = language;
-    
-    const voices = window.speechSynthesis.getVoices();
-    const langVoices = voices.filter(v => v.lang.includes(language.split('-')[0]));
-    
-    if (langVoices.length > 0) {
-      let selectedVoice = langVoices.find(v => v.name.toLowerCase().includes(aiVoice));
-      if (!selectedVoice) {
-        selectedVoice = langVoices[0];
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
       }
-      utterance.voice = selectedVoice;
+    };
+  }, []);
+
+  const speakText = (text: string) => {
+    // Cancel ongoing speech or audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    if (window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
 
-    window.speechSynthesis.speak(utterance);
+    const engine = localStorage.getItem('audio_engine') || 'google';
+
+    // Remove the special [BOOK:id] tag from speakable text
+    const cleanText = text
+      .replace(/\[BOOK:(.*?)\]/g, "")
+      .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
+      .replace(/[\(\)（）【】]/g, "，");
+
+    if (engine === 'google') {
+      // Split text into readable chunks under 150 chars
+      const parts = cleanText.split(/([，。？！；：\n,.\?!;:])/).reduce((acc: string[], cur: string) => {
+        if (acc.length === 0) {
+          acc.push(cur);
+        } else {
+          const lastIdx = acc.length - 1;
+          if (acc[lastIdx].length + cur.length < 150) {
+            acc[lastIdx] += cur;
+          } else {
+            acc.push(cur);
+          }
+        }
+        return acc;
+      }, []).filter(s => s.trim().length > 0);
+
+      let partIdx = 0;
+
+      const playNext = () => {
+        if (partIdx >= parts.length) return;
+        const sentence = parts[partIdx];
+        const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${language}&client=tw-ob&q=${encodeURIComponent(sentence)}`;
+        const audio = new Audio(url);
+        audioRef.current = audio;
+
+        audio.onended = () => {
+          partIdx++;
+          playNext();
+        };
+        audio.onerror = () => {
+          partIdx++;
+          playNext();
+        };
+        audio.play().catch(e => console.error("Google TTS failed in GuideChatBox:", e));
+      };
+
+      playNext();
+    } else {
+      if (!('speechSynthesis' in window)) return;
+      
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+      utterance.lang = language;
+      
+      const voices = window.speechSynthesis.getVoices();
+      const langVoices = voices.filter(v => v.lang.includes(language.split('-')[0]));
+      
+      if (langVoices.length > 0) {
+        let selectedVoice = langVoices.find(v => v.name.toLowerCase().includes(aiVoice));
+        if (!selectedVoice) {
+          selectedVoice = langVoices[0];
+        }
+        utterance.voice = selectedVoice;
+      }
+
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   // Dynamically parses and renders [BOOK:id] tags as clickable cards

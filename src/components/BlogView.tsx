@@ -24,6 +24,9 @@ export default function BlogView({ book }: BlogViewProps) {
   const [currentSpeechIdx, setCurrentSpeechIdx] = useState<number | null>(null);
   const [isSpeechPlaying, setIsSpeechPlaying] = useState(false);
   const [isSpeechLoading, setIsSpeechLoading] = useState(false);
+  const [audioEngine, setAudioEngine] = useState<'google' | 'native'>(() => {
+    return (localStorage.getItem('audio_engine') as 'google' | 'native') || 'google';
+  });
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentIdxRef = useRef<number | null>(null);
@@ -277,7 +280,24 @@ export default function BlogView({ book }: BlogViewProps) {
     playNextPart();
   };
 
-  const playNode = async (index: number) => {
+  const handleEngineChange = (engine: 'google' | 'native') => {
+    setAudioEngine(engine);
+    localStorage.setItem('audio_engine', engine);
+    
+    if (currentIdxRef.current !== null) {
+      const activeIdx = currentIdxRef.current;
+      const wasPlaying = isSpeechPlaying;
+      stopSpeech();
+      
+      if (wasPlaying) {
+        setTimeout(() => {
+          playNode(activeIdx, engine);
+        }, 150);
+      }
+    }
+  };
+
+  const playNode = async (index: number, forceEngine?: 'google' | 'native') => {
     if (index < 0 || index >= speechNodes.length) {
       stopSpeech();
       return;
@@ -315,8 +335,9 @@ export default function BlogView({ book }: BlogViewProps) {
         }
       }
 
-      // Play with the high-fidelity native Web Speech API if supported, otherwise Google TTS fallback
-      if (window.speechSynthesis) {
+      // Play with the selected engine
+      const engineToUse = forceEngine || audioEngine;
+      if (engineToUse === 'native' && window.speechSynthesis) {
         playWithNativeTTS(node.text, index);
       } else {
         playWithGoogleTTS(node.text, index);
@@ -416,8 +437,35 @@ export default function BlogView({ book }: BlogViewProps) {
           </div>
         </div>
 
-        {/* Player Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-4">
+          {/* 語音引擎選擇 */}
+          <div className="flex items-center bg-natural-warm/80 p-0.5 rounded-xl border border-natural-border/60 text-[10px] font-sans select-none">
+            <button
+              onClick={() => handleEngineChange('google')}
+              className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
+                audioEngine === 'google'
+                  ? "bg-[#6B705C] text-white shadow-3xs"
+                  : "text-natural-sand hover:text-natural-dark"
+              }`}
+              title="使用 Google Translate 高清語音引擎 (適合所有瀏覽器，推薦 Linux / 行動端)"
+            >
+              雲端高清
+            </button>
+            <button
+              onClick={() => handleEngineChange('native')}
+              className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
+                audioEngine === 'native'
+                  ? "bg-[#6B705C] text-white shadow-3xs"
+                  : "text-natural-sand hover:text-natural-dark"
+              }`}
+              title="使用瀏覽器內建 TTS 引擎"
+            >
+              系統原生
+            </button>
+          </div>
+
+          {/* Player Controls */}
+          <div className="flex items-center gap-2">
           <button
             onClick={prevSpeech}
             disabled={currentSpeechIdx === null || currentSpeechIdx === 0}
@@ -470,6 +518,7 @@ export default function BlogView({ book }: BlogViewProps) {
           >
             <SkipForward className="w-4 h-4" />
           </button>
+        </div>
         </div>
       </div>
 
