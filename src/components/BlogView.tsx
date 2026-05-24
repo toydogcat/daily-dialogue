@@ -4,6 +4,7 @@ import {
   BookOpen, Award, Users, Compass, Quote, ChevronRight, Check,
   Play, Pause, Square, SkipForward, SkipBack, Volume2, Loader2 
 } from "lucide-react";
+import { kokoroTTSManager, TTSProgress } from "../utils/tts";
 
 interface BlogViewProps {
   book: Book;
@@ -24,9 +25,10 @@ export default function BlogView({ book }: BlogViewProps) {
   const [currentSpeechIdx, setCurrentSpeechIdx] = useState<number | null>(null);
   const [isSpeechPlaying, setIsSpeechPlaying] = useState(false);
   const [isSpeechLoading, setIsSpeechLoading] = useState(false);
-  const [audioEngine, setAudioEngine] = useState<'google' | 'native'>(() => {
-    return (localStorage.getItem('audio_engine') as 'google' | 'native') || 'google';
+  const [audioEngine, setAudioEngine] = useState<'google' | 'native' | 'kokoro'>(() => {
+    return (localStorage.getItem('audio_engine') as 'google' | 'native' | 'kokoro') || 'google';
   });
+  const [kokoroProgress, setKokoroProgress] = useState<TTSProgress>({ status: 'idle', progress: 0, message: '' });
   
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentIdxRef = useRef<number | null>(null);
@@ -35,6 +37,12 @@ export default function BlogView({ book }: BlogViewProps) {
   useEffect(() => {
     currentIdxRef.current = currentSpeechIdx;
   }, [currentSpeechIdx]);
+
+  useEffect(() => {
+    return kokoroTTSManager.addProgressListener((state) => {
+      setKokoroProgress(state);
+    });
+  }, []);
 
   // Load voices on mount for SpeechSynthesis
   useEffect(() => {
@@ -196,6 +204,47 @@ export default function BlogView({ book }: BlogViewProps) {
     playNextPart();
   };
 
+  const playWithKokoroTTS = async (text: string, index: number) => {
+    isNativeTTSRef.current = false;
+    setIsSpeechLoading(true);
+
+    try {
+      await kokoroTTSManager.speak(
+        text,
+        'af_sky',
+        1.0,
+        // onStart
+        () => {
+          if (currentIdxRef.current !== index) {
+            kokoroTTSManager.stop();
+            return;
+          }
+          setIsSpeechLoading(false);
+          setIsSpeechPlaying(true);
+        },
+        // onEnd
+        () => {
+          if (currentIdxRef.current === index) {
+            const nextIdx = index + 1;
+            if (nextIdx < speechNodes.length) {
+              playNode(nextIdx);
+            } else {
+              stopSpeech();
+            }
+          }
+        },
+        // onError
+        (err) => {
+          console.warn("Kokoro TTS failed, falling back to Google TTS:", err);
+          playWithGoogleTTS(text, index);
+        }
+      );
+    } catch (err) {
+      console.warn("Kokoro speak failed, falling back to Google TTS:", err);
+      playWithGoogleTTS(text, index);
+    }
+  };
+
   const playWithNativeTTS = (text: string, index: number) => {
     isNativeTTSRef.current = true;
 
@@ -280,7 +329,7 @@ export default function BlogView({ book }: BlogViewProps) {
     playNextPart();
   };
 
-  const handleEngineChange = (engine: 'google' | 'native') => {
+  const handleEngineChange = (engine: 'google' | 'native' | 'kokoro') => {
     setAudioEngine(engine);
     localStorage.setItem('audio_engine', engine);
     
@@ -297,7 +346,7 @@ export default function BlogView({ book }: BlogViewProps) {
     }
   };
 
-  const playNode = async (index: number, forceEngine?: 'google' | 'native') => {
+  const playNode = async (index: number, forceEngine?: 'google' | 'native' | 'kokoro') => {
     if (index < 0 || index >= speechNodes.length) {
       stopSpeech();
       return;
@@ -339,6 +388,8 @@ export default function BlogView({ book }: BlogViewProps) {
       const engineToUse = forceEngine || audioEngine;
       if (engineToUse === 'native' && window.speechSynthesis) {
         playWithNativeTTS(node.text, index);
+      } else if (engineToUse === 'kokoro') {
+        playWithKokoroTTS(node.text, index);
       } else {
         playWithGoogleTTS(node.text, index);
       }
@@ -356,6 +407,8 @@ export default function BlogView({ book }: BlogViewProps) {
         if (window.speechSynthesis) {
           window.speechSynthesis.pause();
         }
+      } else if (audioEngine === 'kokoro') {
+        kokoroTTSManager.stop();
       } else if (audioRef.current) {
         audioRef.current.pause();
       }
@@ -365,10 +418,13 @@ export default function BlogView({ book }: BlogViewProps) {
         if (window.speechSynthesis) {
           window.speechSynthesis.resume();
         }
+        setIsSpeechPlaying(true);
+      } else if (audioEngine === 'kokoro') {
+        playNode(currentSpeechIdx);
       } else if (audioRef.current) {
         audioRef.current.play().catch(e => console.error("Resume failed:", e));
+        setIsSpeechPlaying(true);
       }
-      setIsSpeechPlaying(true);
     }
   };
 
@@ -381,6 +437,7 @@ export default function BlogView({ book }: BlogViewProps) {
       audioRef.current.src = "";
       audioRef.current = null;
     }
+    kokoroTTSManager.stop();
     setCurrentSpeechIdx(null);
     setIsSpeechPlaying(false);
     setIsSpeechLoading(false);
@@ -419,107 +476,139 @@ export default function BlogView({ book }: BlogViewProps) {
     <div className="max-w-4xl mx-auto space-y-10 pb-16 animate-fade-in" id="blog-view">
       
       {/* 🎧 Premium Sequential AI Audio Reader Bar */}
-      <div className="sticky top-0 z-40 bg-natural-bg/95 backdrop-blur-md border border-natural-border px-5 py-3 rounded-2xl shadow-xs flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in transition-all">
-        <div className="flex items-center gap-3">
-          <div className={`p-2.5 rounded-xl transition-all duration-500 ${isSpeechPlaying ? 'bg-[#6B705C] text-white animate-pulse' : 'bg-natural-warm text-natural-sand'}`}>
-            <Volume2 className={`w-5 h-5 ${isSpeechPlaying ? 'scale-110' : ''}`} />
+      <div className="sticky top-0 z-40 bg-natural-bg/95 backdrop-blur-md border border-natural-border px-5 py-3 rounded-2xl shadow-xs flex flex-col gap-2.5 animate-fade-in transition-all">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+          <div className="flex items-center gap-3">
+            <div className={`p-2.5 rounded-xl transition-all duration-500 ${isSpeechPlaying ? 'bg-[#6B705C] text-white animate-pulse' : 'bg-natural-warm text-natural-sand'}`}>
+              <Volume2 className={`w-5 h-5 ${isSpeechPlaying ? 'scale-110' : ''}`} />
+            </div>
+            <div className="text-left">
+              <h4 className="text-xs font-serif font-bold text-natural-dark flex items-center gap-1.5">
+                <span>AI 語音伴讀教練</span>
+                {isSpeechLoading && <Loader2 className="w-3 h-3 animate-spin text-[#6B705C]" />}
+              </h4>
+              <p className="text-[10px] text-natural-sand font-mono mt-0.5">
+                {currentSpeechIdx !== null 
+                  ? `正播放：[ ${speechNodes[currentSpeechIdx]?.label} ] - 進度 ${currentSpeechIdx + 1} / ${speechNodes.length}`
+                  : "點擊播放啟動全書順序朗讀"}
+              </p>
+            </div>
           </div>
-          <div className="text-left">
-            <h4 className="text-xs font-serif font-bold text-natural-dark flex items-center gap-1.5">
-              <span>AI 語音伴讀教練</span>
-              {isSpeechLoading && <Loader2 className="w-3 h-3 animate-spin text-[#6B705C]" />}
-            </h4>
-            <p className="text-[10px] text-natural-sand font-mono mt-0.5">
-              {currentSpeechIdx !== null 
-                ? `正播放：[ ${speechNodes[currentSpeechIdx]?.label} ] - 進度 ${currentSpeechIdx + 1} / ${speechNodes.length}`
-                : "點擊播放啟動全書順序朗讀"}
-            </p>
+
+          <div className="flex flex-wrap items-center gap-4">
+            {/* 語音引擎選擇 */}
+            <div className="flex items-center bg-natural-warm/80 p-0.5 rounded-xl border border-natural-border/60 text-[10px] font-sans select-none">
+              <button
+                onClick={() => handleEngineChange('google')}
+                className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
+                  audioEngine === 'google'
+                    ? "bg-[#6B705C] text-white shadow-3xs"
+                    : "text-natural-sand hover:text-natural-dark"
+                }`}
+                title="使用 Google Translate 高清語音引擎 (適合所有瀏覽器，推薦 Linux / 行動端)"
+              >
+                雲端高清
+              </button>
+              <button
+                onClick={() => handleEngineChange('kokoro')}
+                className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
+                  audioEngine === 'kokoro'
+                    ? "bg-[#6B705C] text-white shadow-3xs"
+                    : "text-natural-sand hover:text-natural-dark"
+                }`}
+                title="使用 Kokoro-82M 離線 AI 神經語音引擎 (WebGPU/WASM 本機運行，極致逼真)"
+              >
+                離線 AI
+              </button>
+              <button
+                onClick={() => handleEngineChange('native')}
+                className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
+                  audioEngine === 'native'
+                    ? "bg-[#6B705C] text-white shadow-3xs"
+                    : "text-natural-sand hover:text-natural-dark"
+                }`}
+                title="使用瀏覽器內建 TTS 引擎"
+              >
+                系統原生
+              </button>
+            </div>
+
+            {/* Player Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={prevSpeech}
+                disabled={currentSpeechIdx === null || currentSpeechIdx === 0}
+                className="p-2 rounded-xl border border-natural-border bg-natural-bg hover:bg-natural-cream text-natural-sand hover:text-natural-dark disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                title="上一個段落"
+              >
+                <SkipBack className="w-4 h-4" />
+              </button>
+              
+              <button
+                onClick={togglePlaySpeech}
+                disabled={isSpeechLoading}
+                className={`px-4 py-2 rounded-xl flex items-center gap-2 font-medium text-xs shadow-2xs transition-all ${
+                  isSpeechPlaying
+                    ? "bg-[#6B705C] hover:bg-[#5A5A40] text-white"
+                    : "bg-natural-dark hover:bg-natural-dark/90 text-white"
+                }`}
+                title={isSpeechPlaying ? "暫停" : "播放"}
+              >
+                {isSpeechLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isSpeechPlaying ? (
+                  <>
+                    <Pause className="w-4 h-4 fill-current" />
+                    <span>暫停</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="w-4 h-4 fill-current" />
+                    <span>{currentSpeechIdx !== null ? "繼續" : "開始朗讀"}</span>
+                  </>
+                )}
+              </button>
+
+              {currentSpeechIdx !== null && (
+                <button
+                  onClick={stopSpeech}
+                  className="p-2 rounded-xl border border-natural-border bg-natural-bg hover:bg-red-50 text-red-500 hover:text-red-600 transition-all"
+                  title="結束朗讀"
+                >
+                  <Square className="w-4 h-4 fill-current" />
+                </button>
+              )}
+
+              <button
+                onClick={nextSpeech}
+                disabled={currentSpeechIdx === null || currentSpeechIdx === speechNodes.length - 1}
+                className="p-2 rounded-xl border border-natural-border bg-natural-bg hover:bg-natural-cream text-natural-sand hover:text-natural-dark disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                title="下一個段落"
+              >
+                <SkipForward className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
-          {/* 語音引擎選擇 */}
-          <div className="flex items-center bg-natural-warm/80 p-0.5 rounded-xl border border-natural-border/60 text-[10px] font-sans select-none">
-            <button
-              onClick={() => handleEngineChange('google')}
-              className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
-                audioEngine === 'google'
-                  ? "bg-[#6B705C] text-white shadow-3xs"
-                  : "text-natural-sand hover:text-natural-dark"
-              }`}
-              title="使用 Google Translate 高清語音引擎 (適合所有瀏覽器，推薦 Linux / 行動端)"
-            >
-              雲端高清
-            </button>
-            <button
-              onClick={() => handleEngineChange('native')}
-              className={`px-2.5 py-1 rounded-lg transition-all font-semibold cursor-pointer ${
-                audioEngine === 'native'
-                  ? "bg-[#6B705C] text-white shadow-3xs"
-                  : "text-natural-sand hover:text-natural-dark"
-              }`}
-              title="使用瀏覽器內建 TTS 引擎"
-            >
-              系統原生
-            </button>
+        {/* Kokoro model loading progress */}
+        {kokoroProgress.status === 'loading' && (
+          <div className="w-full pt-2 border-t border-natural-border/40 text-[10px] space-y-1.5 animate-slide-up">
+            <div className="flex justify-between items-center text-natural-sand font-mono">
+              <span className="flex items-center gap-1.5">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6B705C]" />
+                {kokoroProgress.message}
+              </span>
+              <span className="font-bold text-[#6B705C]">{kokoroProgress.progress}%</span>
+            </div>
+            <div className="w-full h-1.5 bg-natural-warm rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-[#6B705C] transition-all duration-300 rounded-full"
+                style={{ width: `${kokoroProgress.progress}%` }}
+              />
+            </div>
           </div>
-
-          {/* Player Controls */}
-          <div className="flex items-center gap-2">
-          <button
-            onClick={prevSpeech}
-            disabled={currentSpeechIdx === null || currentSpeechIdx === 0}
-            className="p-2 rounded-xl border border-natural-border bg-natural-bg hover:bg-natural-cream text-natural-sand hover:text-natural-dark disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            title="上一個段落"
-          >
-            <SkipBack className="w-4 h-4" />
-          </button>
-          
-          <button
-            onClick={togglePlaySpeech}
-            disabled={isSpeechLoading}
-            className={`px-4 py-2 rounded-xl flex items-center gap-2 font-medium text-xs shadow-2xs transition-all ${
-              isSpeechPlaying
-                ? "bg-[#6B705C] hover:bg-[#5A5A40] text-white"
-                : "bg-natural-dark hover:bg-natural-dark/90 text-white"
-            }`}
-            title={isSpeechPlaying ? "暫停" : "播放"}
-          >
-            {isSpeechLoading ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : isSpeechPlaying ? (
-              <>
-                <Pause className="w-4 h-4 fill-current" />
-                <span>暫停</span>
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4 fill-current" />
-                <span>{currentSpeechIdx !== null ? "繼續" : "開始朗讀"}</span>
-              </>
-            )}
-          </button>
-
-          {currentSpeechIdx !== null && (
-            <button
-              onClick={stopSpeech}
-              className="p-2 rounded-xl border border-natural-border bg-natural-bg hover:bg-red-50 text-red-500 hover:text-red-600 transition-all"
-              title="結束朗讀"
-            >
-              <Square className="w-4 h-4 fill-current" />
-            </button>
-          )}
-
-          <button
-            onClick={nextSpeech}
-            disabled={currentSpeechIdx === null || currentSpeechIdx === speechNodes.length - 1}
-            className="p-2 rounded-xl border border-natural-border bg-natural-bg hover:bg-natural-cream text-natural-sand hover:text-natural-dark disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            title="下一個段落"
-          >
-            <SkipForward className="w-4 h-4" />
-          </button>
-        </div>
-        </div>
+        )}
       </div>
 
       {/* Header Splash Area */}

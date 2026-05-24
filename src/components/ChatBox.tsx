@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { Book } from "../booksData";
 import { Send, Sparkles, RefreshCw, AlertCircle, Calendar, HelpCircle, ArrowRight, Mic, Volume2 } from "lucide-react";
 import { useWebLLM } from "../hooks/useWebLLM";
+import { kokoroTTSManager } from "../utils/tts";
 
 interface Message {
   id: string;
@@ -344,6 +345,7 @@ ${book.readingGuide}
     if (window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
+    kokoroTTSManager.stop();
 
     const engine = localStorage.getItem('audio_engine') || 'google';
 
@@ -353,7 +355,7 @@ ${book.readingGuide}
       .replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, "")
       .replace(/[\(\)（）【】]/g, "，");
 
-    if (engine === 'google') {
+    const playGoogleTTS = () => {
       // Split text into readable chunks under 150 chars
       const parts = cleanText.split(/([，。？！；：\n,.\?!;:])/).reduce((acc: string[], cur: string) => {
         if (acc.length === 0) {
@@ -390,6 +392,25 @@ ${book.readingGuide}
       };
 
       playNext();
+    };
+
+    if (engine === 'kokoro') {
+      kokoroTTSManager.speak(
+        cleanText,
+        'af_sky',
+        1.0,
+        () => {}, // onStart
+        () => {}, // onEnd
+        (err) => {
+          console.warn("Kokoro speech failed in ChatBox, falling back to Google TTS:", err);
+          playGoogleTTS();
+        }
+      ).catch(err => {
+        console.warn("Kokoro speak failed in ChatBox:", err);
+        playGoogleTTS();
+      });
+    } else if (engine === 'google') {
+      playGoogleTTS();
     } else {
       if (!('speechSynthesis' in window)) return;
       
