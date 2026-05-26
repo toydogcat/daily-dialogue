@@ -158,10 +158,11 @@ export default function App() {
 
   // Filter books by date and showFutureBooks, and sort descending
   const processedBooks = React.useMemo(() => {
+    const todayStr = new Date(Date.now() + 8 * 3600000).toISOString().split('T')[0];
     return booksData
       .filter((b) => {
         if (showFutureBooks) return true;
-        return b.date <= "2026-05-23";
+        return b.date <= todayStr;
       })
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [showFutureBooks]);
